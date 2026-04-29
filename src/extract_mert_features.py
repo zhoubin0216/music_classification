@@ -40,12 +40,12 @@ except ImportError:
     tqdm.write = print  # type: ignore[attr-defined]
 
 
-DEFAULT_DATA_ROOT = (
-    "/home/dt2119/dt2119/datasets/Dataset/western_data/"
-    "gtzan/Data/genres_original"
+DEFAULT_DATA_ROOT = "/home/dt2119/dt2119/music_classification/datasets/audios/western_data/genres_original"
+DEFAULT_OUTPUT_DIR = (
+    "/home/dt2119/dt2119/music_classification/datasets/features/mert_gtzan"
 )
-DEFAULT_OUTPUT_DIR = "/home/dt2119/dt2119/music_classification/outputs/mert_gtzan"
 DEFAULT_MODEL_NAME = "m-a-p/MERT-v1-95M"
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,6 +92,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Chunk length before MERT inference. Use 0 or a negative value to process "
             "each file as one chunk."
+        ),
+    )
+    parser.add_argument(
+        "--min-chunk-seconds",
+        type=float,
+        default=1.0,
+        help=(
+            "Drop trailing chunks shorter than this value. This avoids MERT "
+            "convolution errors from tiny resampling remainders."
         ),
     )
     parser.add_argument(
@@ -154,14 +163,19 @@ def load_mono_audio(path: Path) -> tuple[torch.Tensor, int]:
     return waveform, sample_rate
 
 
-def iter_chunks(waveform: torch.Tensor, chunk_samples: int) -> Iterable[torch.Tensor]:
+def iter_chunks(
+    waveform: torch.Tensor,
+    chunk_samples: int,
+    min_chunk_samples: int,
+) -> Iterable[torch.Tensor]:
     if chunk_samples <= 0 or waveform.numel() <= chunk_samples:
-        yield waveform
+        if waveform.numel() >= min_chunk_samples:
+            yield waveform
         return
 
     for start in range(0, waveform.numel(), chunk_samples):
         chunk = waveform[start : start + chunk_samples]
-        if chunk.numel() > 0:
+        if chunk.numel() >= min_chunk_samples:
             yield chunk
 
 
@@ -182,6 +196,7 @@ def extract_embedding(
     layer: int,
     save_all_layers: bool,
     chunk_seconds: float,
+    min_chunk_seconds: float,
 ) -> tuple[np.ndarray, dict[str, int | float]]:
     waveform, source_sample_rate = load_mono_audio(path)
     target_sample_rate = int(processor.sampling_rate)
@@ -198,12 +213,13 @@ def extract_embedding(
     chunk_samples = int(round(chunk_seconds * target_sample_rate))
     if chunk_seconds <= 0:
         chunk_samples = 0
+    min_chunk_samples = max(1, int(round(min_chunk_seconds * target_sample_rate)))
 
     weighted_sum: torch.Tensor | None = None
     total_samples = 0
     num_chunks = 0
 
-    for chunk in iter_chunks(waveform, chunk_samples):
+    for chunk in iter_chunks(waveform, chunk_samples, min_chunk_samples):
         if chunk.numel() == 0:
             continue
 
@@ -233,6 +249,8 @@ def extract_embedding(
     embedding = (weighted_sum / total_samples).numpy().astype(np.float32)
     stats = {
         "duration_seconds": float(waveform.numel() / target_sample_rate),
+        "processed_seconds": float(total_samples / target_sample_rate),
+        "skipped_tail_seconds": float((waveform.numel() - total_samples) / target_sample_rate),
         "source_sample_rate": int(source_sample_rate),
         "target_sample_rate": int(target_sample_rate),
         "num_chunks": int(num_chunks),
@@ -247,6 +265,8 @@ def write_metadata(metadata_path: Path, rows: list[dict[str, object]]) -> None:
         "label",
         "label_id",
         "duration_seconds",
+        "processed_seconds",
+        "skipped_tail_seconds",
         "source_sample_rate",
         "target_sample_rate",
         "num_chunks",
@@ -296,6 +316,7 @@ def main() -> int:
                 layer=args.layer,
                 save_all_layers=args.save_all_layers,
                 chunk_seconds=args.chunk_seconds,
+                min_chunk_seconds=args.min_chunk_seconds,
             )
         except Exception as exc:  # noqa: BLE001 - keep batch extraction running by default.
             if args.fail_on_error:
@@ -344,6 +365,7 @@ def main() -> int:
         "layer": "all" if args.save_all_layers else args.layer,
         "save_all_layers": args.save_all_layers,
         "chunk_seconds": args.chunk_seconds,
+        "min_chunk_seconds": args.min_chunk_seconds,
         "extensions": args.extensions,
         "max_files_per_class": args.max_files_per_class,
         "num_input_files": len(items),
