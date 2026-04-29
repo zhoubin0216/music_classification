@@ -1,0 +1,16 @@
+# Recommended server setup:
+#   conda create -n music_classification python=3.10 -y
+#   conda activate music_classification
+#   conda install pytorch torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia -y
+#   pip install -r requirements.txt
+#
+# If the server uses a different CUDA version, change the pytorch-cuda value
+# above to match the installed driver/toolkit. Keeping torch and torchaudio in
+# the conda command avoids accidentally installing a CPU-only pip build.
+
+numpy>=1.24,<2.0
+transformers==4.38.0
+huggingface-hub>=0.20
+tqdm>=4.66
+soundfile>=0.12
+scikit-learn>=1.3
