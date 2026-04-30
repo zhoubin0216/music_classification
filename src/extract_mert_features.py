@@ -12,6 +12,9 @@ The script writes:
   - features.npz: feature matrix, numeric labels, class names, source paths
   - metadata.csv: one row per successfully processed audio file
   - extraction_config.json: exact extraction settings
+
+Use --save-chunks with --chunk-seconds 10 for models that aggregate multiple
+segment embeddings per track.
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ from transformers import AutoModel, Wav2Vec2FeatureExtractor
 try:
     from tqdm import tqdm
 except ImportError:
+
     def tqdm(iterable, **kwargs):  # type: ignore[no-redef]
         desc = kwargs.get("desc")
         if desc:
@@ -45,7 +49,6 @@ DEFAULT_OUTPUT_DIR = (
     "/home/dt2119/dt2119/music_classification/datasets/features/mert_gtzan"
 )
 DEFAULT_MODEL_NAME = "m-a-p/MERT-v1-95M"
-
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,6 +87,14 @@ def parse_args() -> argparse.Namespace:
         "--save-all-layers",
         action="store_true",
         help="Save one time-pooled vector per hidden layer instead of one selected layer.",
+    )
+    parser.add_argument(
+        "--save-chunks",
+        action="store_true",
+        help=(
+            "Save one feature row per audio chunk. Without this flag, chunk "
+            "features are averaged into one track-level embedding."
+        ),
     )
     parser.add_argument(
         "--chunk-seconds",
@@ -158,7 +169,9 @@ def discover_audio_files(
 def load_mono_audio(path: Path) -> tuple[torch.Tensor, int]:
     waveform, sample_rate = torchaudio.load(str(path))
     if waveform.ndim != 2:
-        raise RuntimeError(f"Expected waveform with shape [channels, samples], got {waveform.shape}")
+        raise RuntimeError(
+            f"Expected waveform with shape [channels, samples], got {waveform.shape}"
+        )
     waveform = waveform.float().mean(dim=0)
     return waveform, sample_rate
 
@@ -179,7 +192,9 @@ def iter_chunks(
             yield chunk
 
 
-def move_inputs_to_device(inputs: dict[str, torch.Tensor], device: torch.device) -> dict[str, torch.Tensor]:
+def move_inputs_to_device(
+    inputs: dict[str, torch.Tensor], device: torch.device
+) -> dict[str, torch.Tensor]:
     return {
         key: value.to(device) if isinstance(value, torch.Tensor) else value
         for key, value in inputs.items()
@@ -195,6 +210,7 @@ def extract_embedding(
     device: torch.device,
     layer: int,
     save_all_layers: bool,
+    save_chunks: bool,
     chunk_seconds: float,
     min_chunk_seconds: float,
 ) -> tuple[np.ndarray, dict[str, int | float]]:
@@ -216,6 +232,7 @@ def extract_embedding(
     min_chunk_samples = max(1, int(round(min_chunk_seconds * target_sample_rate)))
 
     weighted_sum: torch.Tensor | None = None
+    chunk_embeddings: list[torch.Tensor] = []
     total_samples = 0
     num_chunks = 0
 
@@ -239,18 +256,34 @@ def extract_embedding(
 
         hidden = hidden.detach().cpu()
         weight = int(chunk.numel())
-        weighted_sum = hidden * weight if weighted_sum is None else weighted_sum + hidden * weight
+        if save_chunks:
+            chunk_embeddings.append(hidden)
+        else:
+            weighted_sum = (
+                hidden * weight
+                if weighted_sum is None
+                else weighted_sum + hidden * weight
+            )
         total_samples += weight
         num_chunks += 1
 
-    if weighted_sum is None or total_samples == 0:
+    if (
+        total_samples == 0
+        or (save_chunks and not chunk_embeddings)
+        or (not save_chunks and weighted_sum is None)
+    ):
         raise RuntimeError("Audio file produced no non-empty chunks")
 
-    embedding = (weighted_sum / total_samples).numpy().astype(np.float32)
+    if save_chunks:
+        embedding = torch.stack(chunk_embeddings, dim=0).numpy().astype(np.float32)
+    else:
+        embedding = (weighted_sum / total_samples).numpy().astype(np.float32)
     stats = {
         "duration_seconds": float(waveform.numel() / target_sample_rate),
         "processed_seconds": float(total_samples / target_sample_rate),
-        "skipped_tail_seconds": float((waveform.numel() - total_samples) / target_sample_rate),
+        "skipped_tail_seconds": float(
+            (waveform.numel() - total_samples) / target_sample_rate
+        ),
         "source_sample_rate": int(source_sample_rate),
         "target_sample_rate": int(target_sample_rate),
         "num_chunks": int(num_chunks),
@@ -261,6 +294,8 @@ def extract_embedding(
 def write_metadata(metadata_path: Path, rows: list[dict[str, object]]) -> None:
     fieldnames = [
         "feature_index",
+        "track_id",
+        "segment_index",
         "path",
         "label",
         "label_id",
@@ -301,8 +336,11 @@ def main() -> int:
     features: list[np.ndarray] = []
     labels: list[int] = []
     paths: list[str] = []
+    track_ids: list[int] = []
+    segment_indices: list[int] = []
     metadata_rows: list[dict[str, object]] = []
     failed: list[dict[str, str]] = []
+    successful_tracks = 0
     resampler_cache: dict[tuple[int, int], torchaudio.transforms.Resample] = {}
 
     for path, label, label_id in tqdm(items, desc="Extracting MERT features"):
@@ -315,6 +353,7 @@ def main() -> int:
                 device=device,
                 layer=args.layer,
                 save_all_layers=args.save_all_layers,
+                save_chunks=args.save_chunks,
                 chunk_seconds=args.chunk_seconds,
                 min_chunk_seconds=args.min_chunk_seconds,
             )
@@ -325,19 +364,32 @@ def main() -> int:
             tqdm.write(f"Skipping {path}: {exc}")
             continue
 
-        feature_index = len(features)
-        features.append(embedding)
-        labels.append(label_id)
-        paths.append(str(path))
-        metadata_rows.append(
-            {
-                "feature_index": feature_index,
-                "path": str(path),
-                "label": label,
-                "label_id": label_id,
-                **stats,
-            }
-        )
+        track_id = successful_tracks
+        successful_tracks += 1
+
+        if args.save_chunks:
+            segment_embeddings = embedding
+        else:
+            segment_embeddings = embedding[None, ...]
+
+        for segment_index, segment_embedding in enumerate(segment_embeddings):
+            feature_index = len(features)
+            features.append(segment_embedding)
+            labels.append(label_id)
+            paths.append(str(path))
+            track_ids.append(track_id)
+            segment_indices.append(segment_index)
+            metadata_rows.append(
+                {
+                    "feature_index": feature_index,
+                    "track_id": track_id,
+                    "segment_index": segment_index,
+                    "path": str(path),
+                    "label": label,
+                    "label_id": label_id,
+                    **stats,
+                }
+            )
 
     if not features:
         raise RuntimeError("No features were extracted successfully.")
@@ -350,10 +402,13 @@ def main() -> int:
         features=feature_array,
         labels=label_array,
         paths=np.asarray(paths),
+        track_ids=np.asarray(track_ids, dtype=np.int64),
+        segment_indices=np.asarray(segment_indices, dtype=np.int64),
         class_names=np.asarray(class_names),
         model_name=np.asarray(args.model_name),
         layer=np.asarray("all" if args.save_all_layers else args.layer),
         sample_rate=np.asarray(int(processor.sampling_rate)),
+        save_chunks=np.asarray(args.save_chunks),
     )
     write_metadata(args.output_dir / "metadata.csv", metadata_rows)
 
@@ -364,21 +419,27 @@ def main() -> int:
         "device": str(device),
         "layer": "all" if args.save_all_layers else args.layer,
         "save_all_layers": args.save_all_layers,
+        "save_chunks": args.save_chunks,
         "chunk_seconds": args.chunk_seconds,
         "min_chunk_seconds": args.min_chunk_seconds,
         "extensions": args.extensions,
         "max_files_per_class": args.max_files_per_class,
         "num_input_files": len(items),
-        "num_successful_files": len(features),
+        "num_successful_tracks": successful_tracks,
+        "num_feature_rows": len(features),
         "num_failed_files": len(failed),
         "feature_shape": list(feature_array.shape),
         "class_names": class_names,
     }
-    with (args.output_dir / "extraction_config.json").open("w", encoding="utf-8") as handle:
+    with (args.output_dir / "extraction_config.json").open(
+        "w", encoding="utf-8"
+    ) as handle:
         json.dump(config, handle, indent=2)
 
     if failed:
-        with (args.output_dir / "failed_files.json").open("w", encoding="utf-8") as handle:
+        with (args.output_dir / "failed_files.json").open(
+            "w", encoding="utf-8"
+        ) as handle:
             json.dump(failed, handle, indent=2)
         print(f"Finished with {len(failed)} failed files. See failed_files.json.")
 
