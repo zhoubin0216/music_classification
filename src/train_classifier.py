@@ -9,7 +9,9 @@ For the intended 10-second setup, first run feature extraction with:
 
 This script groups chunk-level feature rows by track_id, then performs 5-fold
 cross validation. For each fold, 3 folds are used for training, 1 for
-validation, and 1 for testing, giving an overall 6:2:2 split.
+validation, and 1 for testing, giving an overall 6:2:2 split. By default, the
+fold models are used only for validation/testing estimates; the saved model is
+trained once at the end on all tracks for the median best epoch from CV.
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ from torch.utils.data import DataLoader, Dataset
 
 DEFAULT_FEATURES_PATH = (
     "/home/dt2119/dt2119/music_classification/"
-    "datasets/features/mert_gtzan/features.npz"
+    "datasets/features/chunked_mert_gtzan/features.npz"
 )
 DEFAULT_OUTPUT_DIR = "/home/dt2119/dt2119/music_classification/outputs/mlp_mert_gtzan"
 
@@ -85,16 +87,34 @@ def parse_args() -> argparse.Namespace:
         default=Path(DEFAULT_OUTPUT_DIR),
         help="Directory where models, metrics, and predictions will be saved.",
     )
-    parser.add_argument("--epochs", type=int, default=80)
+    parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
-    parser.add_argument("--hidden-dim", type=int, default=256)
-    parser.add_argument("--aggregation-hidden-dim", type=int, default=128)
-    parser.add_argument("--dropout", type=float, default=0.3)
-    parser.add_argument("--patience", type=int, default=15)
+    parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--weight-decay", type=float, default=1e-3)
+    parser.add_argument("--hidden-dim", type=int, default=128)
+    parser.add_argument("--aggregation-hidden-dim", type=int, default=64)
+    parser.add_argument("--dropout", type=float, default=0.5)
+    parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument("--label-smoothing", type=float, default=0.05)
+    parser.add_argument("--max-grad-norm", type=float, default=5.0)
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--save-fold-artifacts",
+        action="store_true",
+        help="Save per-fold models, reports, histories, and confusion matrices.",
+    )
+    parser.add_argument(
+        "--save-cv-predictions",
+        action="store_true",
+        help="Save per-track train/validation/test predictions from all CV folds.",
+    )
+    parser.add_argument(
+        "--train-final-model",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Train and save final_model.pt on all tracks after cross-validation.",
+    )
     parser.add_argument(
         "--num-workers",
         type=int,
@@ -322,6 +342,7 @@ def run_epoch(
     criterion: nn.Module,
     device: torch.device,
     optimizer: torch.optim.Optimizer | None = None,
+    max_grad_norm: float | None = None,
 ) -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
     is_training = optimizer is not None
     model.train(is_training)
@@ -345,6 +366,8 @@ def run_epoch(
             loss = criterion(logits, labels)
             if is_training:
                 loss.backward()
+                if max_grad_norm is not None and max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
                 optimizer.step()
 
         predictions = logits.argmax(dim=1)
@@ -433,7 +456,8 @@ def train_fold(
     device: torch.device,
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
     fold_dir = args.output_dir / f"fold_{fold_id}"
-    fold_dir.mkdir(parents=True, exist_ok=True)
+    if args.save_fold_artifacts:
+        fold_dir.mkdir(parents=True, exist_ok=True)
 
     standardizer = fit_standardizer(examples, train_indices)
     scaled_examples = apply_standardizer(examples, standardizer)
@@ -447,7 +471,7 @@ def train_fold(
         dropout=args.dropout,
     ).to(device)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,
@@ -489,6 +513,7 @@ def train_fold(
             criterion,
             device,
             optimizer=optimizer,
+            max_grad_norm=args.max_grad_norm,
         )
         validation_loss, validation_labels, validation_predictions, _ = run_epoch(
             model,
@@ -593,41 +618,42 @@ def train_fold(
                 }
             )
 
-    save_confusion_matrix(
-        fold_dir / "test_confusion_matrix.csv",
-        test_labels,
-        test_predictions,
-        class_names,
-    )
-    with (fold_dir / "classification_report.json").open("w", encoding="utf-8") as handle:
-        json.dump(
-            classification_report(
-                test_labels,
-                test_predictions,
-                labels=np.arange(len(class_names)),
-                target_names=class_names,
-                zero_division=0,
-                output_dict=True,
-            ),
-            handle,
-            indent=2,
+    if args.save_fold_artifacts:
+        save_confusion_matrix(
+            fold_dir / "test_confusion_matrix.csv",
+            test_labels,
+            test_predictions,
+            class_names,
         )
-    with (fold_dir / "metrics.json").open("w", encoding="utf-8") as handle:
-        json.dump(fold_metrics, handle, indent=2)
-    with (fold_dir / "history.json").open("w", encoding="utf-8") as handle:
-        json.dump(history, handle, indent=2)
+        with (fold_dir / "classification_report.json").open("w", encoding="utf-8") as handle:
+            json.dump(
+                classification_report(
+                    test_labels,
+                    test_predictions,
+                    labels=np.arange(len(class_names)),
+                    target_names=class_names,
+                    zero_division=0,
+                    output_dict=True,
+                ),
+                handle,
+                indent=2,
+            )
+        with (fold_dir / "metrics.json").open("w", encoding="utf-8") as handle:
+            json.dump(fold_metrics, handle, indent=2)
+        with (fold_dir / "history.json").open("w", encoding="utf-8") as handle:
+            json.dump(history, handle, indent=2)
 
-    torch.save(
-        {
-            "model_state_dict": best_state,
-            "class_names": class_names,
-            "input_shape": input_shape,
-            "standardizer_mean": standardizer.mean,
-            "standardizer_std": standardizer.std,
-            "args": vars(args),
-        },
-        fold_dir / "best_model.pt",
-    )
+        torch.save(
+            {
+                "model_state_dict": best_state,
+                "class_names": class_names,
+                "input_shape": input_shape,
+                "standardizer_mean": standardizer.mean,
+                "standardizer_std": standardizer.std,
+                "args": vars(args),
+            },
+            fold_dir / "best_model.pt",
+        )
 
     print(
         f"fold={fold_id} done "
@@ -637,15 +663,100 @@ def train_fold(
     return fold_metrics, prediction_rows
 
 
-def summarize(fold_metrics: list[dict[str, object]]) -> dict[str, object]:
+def train_final_model(
+    examples: list[TrackExample],
+    class_names: list[str],
+    final_epochs: int,
+    args: argparse.Namespace,
+    device: torch.device,
+) -> dict[str, object]:
+    all_indices = np.arange(len(examples))
+    standardizer = fit_standardizer(examples, all_indices)
+    scaled_examples = apply_standardizer(examples, standardizer)
+    input_shape = tuple(scaled_examples[0].features.shape[1:])
+
+    model = MLPGenreClassifier(
+        input_shape=input_shape,
+        num_classes=len(class_names),
+        hidden_dim=args.hidden_dim,
+        aggregation_hidden_dim=args.aggregation_hidden_dim,
+        dropout=args.dropout,
+    ).to(device)
+    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+    )
+    loader = make_loader(
+        scaled_examples,
+        all_indices,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+    )
+
+    history: list[dict[str, float | int]] = []
+    for epoch in range(1, final_epochs + 1):
+        train_loss, train_labels, train_predictions, _ = run_epoch(
+            model,
+            loader,
+            criterion,
+            device,
+            optimizer=optimizer,
+            max_grad_norm=args.max_grad_norm,
+        )
+        train_metrics = metric_dict(train_labels, train_predictions)
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "train_accuracy": train_metrics["accuracy"],
+                "train_macro_f1": train_metrics["macro_f1"],
+            }
+        )
+        print(
+            f"final epoch={epoch:03d} "
+            f"train_loss={train_loss:.4f} train_f1={train_metrics['macro_f1']:.4f}"
+        )
+
+    final_model_path = args.output_dir / "final_model.pt"
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "class_names": class_names,
+            "input_shape": input_shape,
+            "standardizer_mean": standardizer.mean,
+            "standardizer_std": standardizer.std,
+            "feature_path": str(args.features),
+            "final_epochs": final_epochs,
+            "args": vars(args),
+        },
+        final_model_path,
+    )
+    with (args.output_dir / "final_training_history.json").open("w", encoding="utf-8") as handle:
+        json.dump(history, handle, indent=2)
+
+    return {
+        "model_path": str(final_model_path),
+        "final_epochs": final_epochs,
+        "input_shape": list(input_shape),
+        "num_train": len(examples),
+        "last_train_accuracy": history[-1]["train_accuracy"] if history else None,
+        "last_train_macro_f1": history[-1]["train_macro_f1"] if history else None,
+    }
+
+
+def summarize(fold_metrics: list[dict[str, object]], include_folds: bool = False) -> dict[str, object]:
     test_accuracies = np.asarray([fold["test"]["accuracy"] for fold in fold_metrics], dtype=np.float64)
     test_macro_f1 = np.asarray([fold["test"]["macro_f1"] for fold in fold_metrics], dtype=np.float64)
     validation_macro_f1 = np.asarray(
         [fold["validation"]["macro_f1"] for fold in fold_metrics],
         dtype=np.float64,
     )
+    best_epochs = np.asarray([fold["best_epoch"] for fold in fold_metrics], dtype=np.int64)
 
-    return {
+    summary: dict[str, object] = {
         "num_folds": len(fold_metrics),
         "test_accuracy_mean": float(test_accuracies.mean()),
         "test_accuracy_std": float(test_accuracies.std(ddof=0)),
@@ -653,8 +764,11 @@ def summarize(fold_metrics: list[dict[str, object]]) -> dict[str, object]:
         "test_macro_f1_std": float(test_macro_f1.std(ddof=0)),
         "validation_macro_f1_mean": float(validation_macro_f1.mean()),
         "validation_macro_f1_std": float(validation_macro_f1.std(ddof=0)),
-        "folds": fold_metrics,
+        "median_best_epoch": int(np.median(best_epochs)),
     }
+    if include_folds:
+        summary["folds"] = fold_metrics
+    return summary
 
 
 def main() -> int:
@@ -702,10 +816,22 @@ def main() -> int:
         all_fold_metrics.append(fold_metrics)
         all_prediction_rows.extend(prediction_rows)
 
-    summary = summarize(all_fold_metrics)
+    summary = summarize(all_fold_metrics, include_folds=args.save_fold_artifacts)
+
+    if args.train_final_model:
+        final_epochs = max(1, int(summary["median_best_epoch"]))
+        summary["final_model"] = train_final_model(
+            examples=examples,
+            class_names=class_names,
+            final_epochs=final_epochs,
+            args=args,
+            device=device,
+        )
+
     with (args.output_dir / "summary.json").open("w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)
-    write_predictions(args.output_dir / "cv_predictions.csv", all_prediction_rows)
+    if args.save_cv_predictions:
+        write_predictions(args.output_dir / "cv_predictions.csv", all_prediction_rows)
 
     print(
         "Cross-validation summary: "
