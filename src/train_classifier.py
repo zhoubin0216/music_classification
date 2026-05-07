@@ -27,17 +27,21 @@ from typing import Iterable
 
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+)
 from sklearn.model_selection import StratifiedKFold
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 
-DEFAULT_FEATURES_PATH = (
-    "/home/dt2119/dt2119/music_classification/"
-    "datasets/features/chunked_mert_gtzan/features.npz"
+DEFAULT_FEATURES_PATH = "/home/dt2119/dt2119/music_classification/datasets/features/chunked_mert_gtzan/features.npz"
+DEFAULT_OUTPUT_DIR = (
+    "/home/dt2119/dt2119/music_classification/outputs/mlp_chunked_mert_gtzan"
 )
-DEFAULT_OUTPUT_DIR = "/home/dt2119/dt2119/music_classification/outputs/mlp_mert_gtzan"
 
 
 @dataclass(frozen=True)
@@ -89,12 +93,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=5e-4)
+    parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--weight-decay", type=float, default=1e-3)
-    parser.add_argument("--hidden-dim", type=int, default=128)
-    parser.add_argument("--aggregation-hidden-dim", type=int, default=64)
+    parser.add_argument("--hidden-dim", type=int, default=64)
+    parser.add_argument("--aggregation-hidden-dim", type=int, default=16)
     parser.add_argument("--dropout", type=float, default=0.5)
-    parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--label-smoothing", type=float, default=0.05)
     parser.add_argument("--max-grad-norm", type=float, default=5.0)
     parser.add_argument("--folds", type=int, default=5)
@@ -144,7 +148,11 @@ def load_grouped_features(features_path: Path) -> tuple[list[TrackExample], list
     data = np.load(features_path, allow_pickle=True)
     features = data["features"].astype(np.float32)
     labels = data["labels"].astype(np.int64)
-    paths = data["paths"].astype(str) if "paths" in data.files else np.asarray([""] * len(labels))
+    paths = (
+        data["paths"].astype(str)
+        if "paths" in data.files
+        else np.asarray([""] * len(labels))
+    )
     class_names = (
         [str(name) for name in data["class_names"].tolist()]
         if "class_names" in data.files
@@ -152,9 +160,13 @@ def load_grouped_features(features_path: Path) -> tuple[list[TrackExample], list
     )
 
     if features.ndim < 2:
-        raise ValueError(f"Expected feature array with at least 2 dims, got {features.shape}")
+        raise ValueError(
+            f"Expected feature array with at least 2 dims, got {features.shape}"
+        )
     if len(features) != len(labels):
-        raise ValueError(f"features and labels length mismatch: {len(features)} vs {len(labels)}")
+        raise ValueError(
+            f"features and labels length mismatch: {len(features)} vs {len(labels)}"
+        )
 
     if "track_ids" in data.files:
         track_ids = data["track_ids"].astype(np.int64)
@@ -181,7 +193,9 @@ def load_grouped_features(features_path: Path) -> tuple[list[TrackExample], list
         row_indices = row_indices[np.argsort(segment_indices[row_indices])]
         unique_labels = np.unique(labels[row_indices])
         if len(unique_labels) != 1:
-            raise ValueError(f"Track {track_id} has inconsistent labels: {unique_labels}")
+            raise ValueError(
+                f"Track {track_id} has inconsistent labels: {unique_labels}"
+            )
 
         examples.append(
             TrackExample(
@@ -195,9 +209,14 @@ def load_grouped_features(features_path: Path) -> tuple[list[TrackExample], list
     return examples, class_names
 
 
-def fit_standardizer(examples: list[TrackExample], train_indices: np.ndarray) -> Standardizer:
+def fit_standardizer(
+    examples: list[TrackExample], train_indices: np.ndarray
+) -> Standardizer:
     train_frames = np.concatenate(
-        [examples[index].features.reshape(-1, examples[index].features.shape[-1]) for index in train_indices],
+        [
+            examples[index].features.reshape(-1, examples[index].features.shape[-1])
+            for index in train_indices
+        ],
         axis=0,
     )
     mean = train_frames.mean(axis=0, dtype=np.float64).astype(np.float32)
@@ -206,10 +225,14 @@ def fit_standardizer(examples: list[TrackExample], train_indices: np.ndarray) ->
     return Standardizer(mean=mean, std=std)
 
 
-def apply_standardizer(examples: list[TrackExample], standardizer: Standardizer) -> list[TrackExample]:
+def apply_standardizer(
+    examples: list[TrackExample], standardizer: Standardizer
+) -> list[TrackExample]:
     scaled: list[TrackExample] = []
     for example in examples:
-        features = ((example.features - standardizer.mean) / standardizer.std).astype(np.float32)
+        features = ((example.features - standardizer.mean) / standardizer.std).astype(
+            np.float32
+        )
         scaled.append(
             TrackExample(
                 features=features,
@@ -222,13 +245,15 @@ def apply_standardizer(examples: list[TrackExample], standardizer: Standardizer)
 
 
 def collate_tracks(
-    batch: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+    batch: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     features, labels, indices = zip(*batch)
     max_chunks = max(feature.shape[0] for feature in features)
     trailing_shape = features[0].shape[1:]
 
-    padded = torch.zeros((len(features), max_chunks, *trailing_shape), dtype=torch.float32)
+    padded = torch.zeros(
+        (len(features), max_chunks, *trailing_shape), dtype=torch.float32
+    )
     mask = torch.zeros((len(features), max_chunks), dtype=torch.bool)
 
     for row, feature in enumerate(features):
@@ -263,7 +288,9 @@ class ChunkWeightedAggregation(nn.Module):
             nn.Linear(hidden_dim, 1),
         )
 
-    def forward(self, features: torch.Tensor, mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, features: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # features: [batch, chunks, dim], mask: [batch, chunks]
         scores = self.scorer(features).squeeze(-1)
         scores = scores.masked_fill(~mask, torch.finfo(scores.dtype).min)
@@ -312,7 +339,9 @@ class MLPGenreClassifier(nn.Module):
             nn.Linear(max(hidden_dim // 2, num_classes), num_classes),
         )
 
-    def forward(self, features: torch.Tensor, mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, features: torch.Tensor, mask: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         if self.layer_aggregation is not None:
             features = self.layer_aggregation(features)
         pooled, chunk_weights = self.chunk_aggregation(features, mask)
@@ -390,8 +419,12 @@ def run_epoch(
 def metric_dict(labels: np.ndarray, predictions: np.ndarray) -> dict[str, float]:
     return {
         "accuracy": float(accuracy_score(labels, predictions)),
-        "macro_f1": float(f1_score(labels, predictions, average="macro", zero_division=0)),
-        "weighted_f1": float(f1_score(labels, predictions, average="weighted", zero_division=0)),
+        "macro_f1": float(
+            f1_score(labels, predictions, average="macro", zero_division=0)
+        ),
+        "weighted_f1": float(
+            f1_score(labels, predictions, average="weighted", zero_division=0)
+        ),
     }
 
 
@@ -430,9 +463,13 @@ def write_predictions(
         writer.writerows(rows)
 
 
-def build_cv_splits(labels: np.ndarray, folds: int, seed: int) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+def build_cv_splits(
+    labels: np.ndarray, folds: int, seed: int
+) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     splitter = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
-    heldout_folds = [test_index for _, test_index in splitter.split(np.zeros(len(labels)), labels)]
+    heldout_folds = [
+        test_index for _, test_index in splitter.split(np.zeros(len(labels)), labels)
+    ]
 
     splits: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
     all_indices = np.arange(len(labels))
@@ -563,7 +600,12 @@ def train_fold(
         criterion,
         device,
     )
-    validation_loss, validation_labels, validation_predictions, validation_track_indices = run_epoch(
+    (
+        validation_loss,
+        validation_labels,
+        validation_predictions,
+        validation_track_indices,
+    ) = run_epoch(
         model,
         validation_loader,
         criterion,
@@ -602,7 +644,9 @@ def train_fold(
         split_metrics["loss"] = float(loss)
         fold_metrics[split_name] = split_metrics
 
-        for track_index, true_label, pred_label in zip(track_indices, labels, predictions):
+        for track_index, true_label, pred_label in zip(
+            track_indices, labels, predictions
+        ):
             example = examples[int(track_index)]
             prediction_rows.append(
                 {
@@ -625,7 +669,9 @@ def train_fold(
             test_predictions,
             class_names,
         )
-        with (fold_dir / "classification_report.json").open("w", encoding="utf-8") as handle:
+        with (fold_dir / "classification_report.json").open(
+            "w", encoding="utf-8"
+        ) as handle:
             json.dump(
                 classification_report(
                     test_labels,
@@ -734,7 +780,9 @@ def train_final_model(
         },
         final_model_path,
     )
-    with (args.output_dir / "final_training_history.json").open("w", encoding="utf-8") as handle:
+    with (args.output_dir / "final_training_history.json").open(
+        "w", encoding="utf-8"
+    ) as handle:
         json.dump(history, handle, indent=2)
 
     return {
@@ -747,14 +795,22 @@ def train_final_model(
     }
 
 
-def summarize(fold_metrics: list[dict[str, object]], include_folds: bool = False) -> dict[str, object]:
-    test_accuracies = np.asarray([fold["test"]["accuracy"] for fold in fold_metrics], dtype=np.float64)
-    test_macro_f1 = np.asarray([fold["test"]["macro_f1"] for fold in fold_metrics], dtype=np.float64)
+def summarize(
+    fold_metrics: list[dict[str, object]], include_folds: bool = False
+) -> dict[str, object]:
+    test_accuracies = np.asarray(
+        [fold["test"]["accuracy"] for fold in fold_metrics], dtype=np.float64
+    )
+    test_macro_f1 = np.asarray(
+        [fold["test"]["macro_f1"] for fold in fold_metrics], dtype=np.float64
+    )
     validation_macro_f1 = np.asarray(
         [fold["validation"]["macro_f1"] for fold in fold_metrics],
         dtype=np.float64,
     )
-    best_epochs = np.asarray([fold["best_epoch"] for fold in fold_metrics], dtype=np.int64)
+    best_epochs = np.asarray(
+        [fold["best_epoch"] for fold in fold_metrics], dtype=np.int64
+    )
 
     summary: dict[str, object] = {
         "num_folds": len(fold_metrics),
@@ -779,7 +835,9 @@ def main() -> int:
 
     examples, class_names = load_grouped_features(args.features)
     labels = np.asarray([example.label for example in examples], dtype=np.int64)
-    chunk_counts = np.asarray([example.features.shape[0] for example in examples], dtype=np.int64)
+    chunk_counts = np.asarray(
+        [example.features.shape[0] for example in examples], dtype=np.int64
+    )
 
     print(f"Loaded {len(examples)} tracks from {args.features}")
     print(f"Classes ({len(class_names)}): {', '.join(class_names)}")
@@ -798,7 +856,9 @@ def main() -> int:
     all_fold_metrics: list[dict[str, object]] = []
     all_prediction_rows: list[dict[str, object]] = []
 
-    for fold_id, (train_indices, validation_indices, test_indices) in enumerate(splits, start=1):
+    for fold_id, (train_indices, validation_indices, test_indices) in enumerate(
+        splits, start=1
+    ):
         print(
             f"fold={fold_id} split sizes: "
             f"train={len(train_indices)} validation={len(validation_indices)} test={len(test_indices)}"

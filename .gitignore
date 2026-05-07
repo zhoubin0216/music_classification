@@ -1,5 +1,4 @@
 pyrightconfig.json
 __pycache__/
 *.pyc
-datasets/
-outputs/
+audios/

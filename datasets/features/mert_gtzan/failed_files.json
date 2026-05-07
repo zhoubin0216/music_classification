@@ -1,0 +1,6 @@
+[
+  {
+    "path": "/home/dt2119/dt2119/music_classification/datasets/audios/western_data/genres_original/jazz/jazz.00054.wav",
+    "error": "LibsndfileError(1, \"Error opening '/home/dt2119/dt2119/music_classification/datasets/audios/western_data/genres_original/jazz/jazz.00054.wav': \")"
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "num_folds": 5,
+  "test_accuracy_mean": 0.8068040201005026,
+  "test_accuracy_std": 0.03430652346248475,
+  "test_macro_f1_mean": 0.802631947703863,
+  "test_macro_f1_std": 0.03689254876187647,
+  "validation_macro_f1_mean": 0.7971185425143407,
+  "validation_macro_f1_std": 0.032802436207276,
+  "median_best_epoch": 19,
+  "final_model": {
+    "model_path": "/home/dt2119/dt2119/music_classification/outputs/mlp_mert_gtzan/final_model.pt",
+    "final_epochs": 19,
+    "input_shape": [
+      768
+    ],
+    "num_train": 999,
+    "last_train_accuracy": 0.8848848848848849,
+    "last_train_macro_f1": 0.8845410685134174
+  }
+}
