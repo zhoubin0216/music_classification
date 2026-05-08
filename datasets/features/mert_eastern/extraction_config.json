@@ -1,0 +1,33 @@
+{
+  "data_root": "datasets/audios/eastern_sliced",
+  "output_dir": "outputs/mert_eastern",
+  "model_name": "m-a-p/MERT-v1-95M",
+  "device": "cpu",
+  "layer": -1,
+  "save_all_layers": false,
+  "save_chunks": false,
+  "chunk_seconds": 0.0,
+  "min_chunk_seconds": 1.0,
+  "extensions": [
+    ".wav"
+  ],
+  "max_files_per_class": null,
+  "num_input_files": 2111,
+  "num_successful_tracks": 2111,
+  "num_feature_rows": 2111,
+  "num_failed_files": 0,
+  "feature_shape": [
+    2111,
+    768
+  ],
+  "class_names": [
+    "carnatic",
+    "cpop",
+    "enka",
+    "guqinguzheng",
+    "jingju",
+    "jpop",
+    "kpop",
+    "sitar"
+  ]
+}
