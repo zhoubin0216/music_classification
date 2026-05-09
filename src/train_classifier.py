@@ -38,10 +38,8 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 
-DEFAULT_FEATURES_PATH = "/home/dt2119/dt2119/music_classification/datasets/features/chunked_mert_gtzan/features.npz"
-DEFAULT_OUTPUT_DIR = (
-    "/home/dt2119/dt2119/music_classification/outputs/mlp_chunked_mert_gtzan"
-)
+DEFAULT_FEATURES_PATH = "datasets/features/chunked_mert_gtzan/features.npz"
+DEFAULT_OUTPUT_DIR = "outputs/mlp_chunked_mert_gtzan"
 
 
 @dataclass(frozen=True)

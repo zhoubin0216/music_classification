@@ -44,10 +44,8 @@ except ImportError:
     tqdm.write = print  # type: ignore[attr-defined]
 
 
-DEFAULT_DATA_ROOT = "/home/dt2119/dt2119/music_classification/datasets/audios/western_data/genres_original"
-DEFAULT_OUTPUT_DIR = (
-    "/home/dt2119/dt2119/music_classification/datasets/features/mert_gtzan"
-)
+DEFAULT_DATA_ROOT = "datasets/audios/western_data/genres_original"
+DEFAULT_OUTPUT_DIR = "datasets/features/mert_gtzan"
 DEFAULT_MODEL_NAME = "m-a-p/MERT-v1-95M"
 
 
