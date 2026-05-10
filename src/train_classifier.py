@@ -33,7 +33,7 @@ from sklearn.metrics import (
     confusion_matrix,
     f1_score,
 )
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
@@ -101,6 +101,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-grad-norm", type=float, default=5.0)
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--gtzan-artist-index",
+        type=Path,
+        default=None,
+        help=(
+            "Optional GTZAN index.txt with 'filename ::: artist ::: title'. "
+            "When set, CV uses artist-disjoint StratifiedGroupKFold."
+        ),
+    )
     parser.add_argument(
         "--save-fold-artifacts",
         action="store_true",
@@ -461,13 +470,79 @@ def write_predictions(
         writer.writerows(rows)
 
 
+def parse_gtzan_artist_index(index_path: Path) -> dict[str, str]:
+    if not index_path.exists():
+        raise FileNotFoundError(f"GTZAN artist index does not exist: {index_path}")
+
+    filename_to_artist: dict[str, str] = {}
+    with index_path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = [part.strip() for part in line.split(":::")]
+            if len(parts) < 3:
+                continue
+            filename, artist = parts[0], parts[1]
+            if filename and artist:
+                filename_to_artist[filename] = artist
+    if not filename_to_artist:
+        raise RuntimeError(f"No filename/artist entries found in: {index_path}")
+    return filename_to_artist
+
+
+def filename_from_path(path: str) -> str:
+    return Path(path).name
+
+
+def build_gtzan_artist_groups(
+    examples: list[TrackExample],
+    index_path: Path,
+) -> tuple[np.ndarray, dict[str, object]]:
+    filename_to_artist = parse_gtzan_artist_index(index_path)
+    groups: list[str] = []
+    missing_filenames: list[str] = []
+
+    for example in examples:
+        filename = filename_from_path(example.path)
+        artist = filename_to_artist.get(filename)
+        if artist is None:
+            missing_filenames.append(filename)
+            artist = f"__unknown_artist__::{filename}"
+        groups.append(artist)
+
+    groups_array = np.asarray(groups)
+    summary = {
+        "index_path": str(index_path),
+        "num_examples": len(examples),
+        "num_artist_groups": int(np.unique(groups_array).size),
+        "num_missing_artist_entries": len(missing_filenames),
+        "missing_artist_filenames": missing_filenames,
+    }
+    return groups_array, summary
+
+
 def build_cv_splits(
-    labels: np.ndarray, folds: int, seed: int
+    labels: np.ndarray,
+    folds: int,
+    seed: int,
+    groups: np.ndarray | None = None,
 ) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    splitter = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
-    heldout_folds = [
-        test_index for _, test_index in splitter.split(np.zeros(len(labels)), labels)
-    ]
+    if groups is None:
+        splitter = StratifiedKFold(n_splits=folds, shuffle=True, random_state=seed)
+        heldout_folds = [
+            test_index for _, test_index in splitter.split(np.zeros(len(labels)), labels)
+        ]
+    else:
+        splitter = StratifiedGroupKFold(n_splits=folds, shuffle=True, random_state=seed)
+        heldout_folds = [
+            test_index
+            for _, test_index in splitter.split(
+                np.zeros(len(labels)),
+                labels,
+                groups=groups,
+            )
+        ]
 
     splits: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
     all_indices = np.arange(len(labels))
@@ -478,6 +553,18 @@ def build_cv_splits(
         train_indices = np.setdiff1d(all_indices, excluded, assume_unique=False)
         splits.append((train_indices, validation_indices, test_indices))
     return splits
+
+
+def assert_group_disjoint(
+    splits: list[tuple[np.ndarray, np.ndarray, np.ndarray]],
+    groups: np.ndarray,
+) -> None:
+    for fold_id, (train_indices, validation_indices, test_indices) in enumerate(splits, start=1):
+        train_groups = set(groups[train_indices].tolist())
+        validation_groups = set(groups[validation_indices].tolist())
+        test_groups = set(groups[test_indices].tolist())
+        if train_groups & validation_groups or train_groups & test_groups or validation_groups & test_groups:
+            raise RuntimeError(f"Artist-group leakage detected in fold {fold_id}")
 
 
 def train_fold(
@@ -850,7 +937,20 @@ def main() -> int:
             f"Warning: --folds {args.folds} changes the requested 5-fold 6:2:2 protocol."
         )
 
-    splits = build_cv_splits(labels, folds=args.folds, seed=args.seed)
+    groups: np.ndarray | None = None
+    group_summary: dict[str, object] | None = None
+    if args.gtzan_artist_index is not None:
+        groups, group_summary = build_gtzan_artist_groups(examples, args.gtzan_artist_index)
+        print(
+            "Using artist-filtered GTZAN splits: "
+            f"{group_summary['num_artist_groups']} artist groups, "
+            f"{group_summary['num_missing_artist_entries']} missing index entries"
+        )
+
+    splits = build_cv_splits(labels, folds=args.folds, seed=args.seed, groups=groups)
+    if groups is not None:
+        assert_group_disjoint(splits, groups)
+
     all_fold_metrics: list[dict[str, object]] = []
     all_prediction_rows: list[dict[str, object]] = []
 
@@ -875,6 +975,11 @@ def main() -> int:
         all_prediction_rows.extend(prediction_rows)
 
     summary = summarize(all_fold_metrics, include_folds=args.save_fold_artifacts)
+    if group_summary is not None:
+        summary["group_split"] = group_summary
+        summary["split_strategy"] = "stratified_group_kfold_by_artist"
+    else:
+        summary["split_strategy"] = "stratified_kfold_random_tracks"
 
     if args.train_final_model:
         final_epochs = max(1, int(summary["median_best_epoch"]))
