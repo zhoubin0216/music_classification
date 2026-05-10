@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect artist-disjoint GTZAN splits for extracted MERT features."""
+"""Inspect group-disjoint splits for extracted MERT features."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from train_classifier import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check GTZAN artist-filtered split sizes and leakage."
+        description="Check artist/source group-filtered split sizes and leakage."
     )
     parser.add_argument(
         "--features",
@@ -54,7 +54,9 @@ def main() -> int:
 
     print(f"Loaded tracks: {len(examples)}")
     print(f"Classes: {', '.join(class_names)}")
-    print(f"Artist groups: {group_summary['num_artist_groups']}")
+    print(f"Total groups: {group_summary['num_groups']}")
+    print(f"GTZAN artist groups: {group_summary['num_artist_groups']}")
+    print(f"Fallback source groups: {group_summary['num_fallback_groups']}")
     print(f"Missing artist entries: {group_summary['num_missing_artist_entries']}")
     for fold_id, (train_indices, validation_indices, test_indices) in enumerate(splits, start=1):
         print()
@@ -63,7 +65,7 @@ def main() -> int:
             f"train={len(train_indices)} val={len(validation_indices)} test={len(test_indices)}"
         )
         print(
-            f"fold={fold_id} artist groups: "
+            f"fold={fold_id} groups: "
             f"train={len(set(groups[train_indices]))} "
             f"val={len(set(groups[validation_indices]))} "
             f"test={len(set(groups[test_indices]))}"
@@ -72,7 +74,7 @@ def main() -> int:
         print(f"fold={fold_id} val counts:   {class_counts(labels, class_names, validation_indices)}")
         print(f"fold={fold_id} test counts:  {class_counts(labels, class_names, test_indices)}")
     print()
-    print("No artist overlap found across train/validation/test within any fold.")
+    print("No group overlap found across train/validation/test within any fold.")
     return 0
 
 

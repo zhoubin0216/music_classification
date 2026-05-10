@@ -19,6 +19,7 @@ import argparse
 import csv
 import json
 import math
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,10 @@ import torch
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 from sklearn.preprocessing import StandardScaler
+
+SRC_DIR = Path(__file__).resolve().parents[1]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 from train_classifier import (
     MLPGenreClassifier,
@@ -38,8 +43,8 @@ from train_classifier import (
 
 
 DEFAULT_EASTERN_FEATURES = "datasets/features/mert_eastern/features.npz"
-DEFAULT_WESTERN_MODEL = "outputs/mlp_mert_gtzan/final_model.pt"
-DEFAULT_OUTPUT_DIR = "outputs/experiment1_western_bias_probe"
+DEFAULT_WESTERN_MODEL = "outputs/mlp_mert_gtzan_artist_filtered/final_model.pt"
+DEFAULT_OUTPUT_DIR = "outputs/experiment1"
 
 
 def parse_args() -> argparse.Namespace:

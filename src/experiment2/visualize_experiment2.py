@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 
 
 DEFAULT_FEATURES = "datasets/features/mert_mixed_18/features.npz"
-DEFAULT_RESULTS_DIR = "outputs/mlp_mert_mixed_18"
+DEFAULT_RESULTS_DIR = "outputs/mlp_mert_18"
 
 
 def parse_args() -> argparse.Namespace:

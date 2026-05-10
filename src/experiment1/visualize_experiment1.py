@@ -15,7 +15,7 @@ from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 
 
-DEFAULT_INPUT_DIR = "outputs/experiment1_western_bias_probe"
+DEFAULT_INPUT_DIR = "outputs/experiment1"
 
 
 def parse_args() -> argparse.Namespace:

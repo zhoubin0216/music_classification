@@ -187,40 +187,35 @@ The Western-only baseline trains a 10-class MLP on GTZAN MERT features.
 Output:
 
 ```text
-outputs/mlp_mert_gtzan/
+outputs/mlp_mert_gtzan_artist_filtered/
 ```
 
 Cross-validation result:
 
 ```text
-Test accuracy mean: 0.8068
-Test accuracy std: 0.0343
-Test macro F1 mean: 0.8026
-Test macro F1 std: 0.0369
-Validation macro F1 mean: 0.7971
-Median best epoch: 19
+Test accuracy mean: 0.6249
+Test accuracy std: 0.0571
+Test macro F1 mean: 0.5886
+Test macro F1 std: 0.0531
 ```
 
 Final model:
 
 ```text
-outputs/mlp_mert_gtzan/final_model.pt
+outputs/mlp_mert_gtzan_artist_filtered/final_model.pt
 ```
 
 Final model training:
 
 ```text
 Training tracks: 999
-Final epochs: 19
-Final train accuracy: 0.8849
-Final train macro F1: 0.8845
 ```
 
 Interpretation:
 
-- The Western-only model is a reasonable baseline.
-- The test accuracy around 0.8 is plausible for GTZAN using frozen MERT features and a small classifier.
-- Train performance is higher than test performance, so regularization and early stopping are useful.
+- Artist-filtered evaluation is the current Western-only baseline.
+- The previous random-split score around 0.8 was likely inflated by GTZAN artist leakage.
+- Train performance can still be higher than test performance, so regularization and early stopping remain useful.
 
 ## 5. Experiment 1: Bias Validation
 
@@ -243,7 +238,7 @@ This is not Eastern genre classification accuracy. The Eastern labels are outsid
 Directory:
 
 ```text
-outputs/experiment1_western_bias_probe/
+outputs/experiment1/
 ```
 
 Important files:
@@ -614,4 +609,4 @@ t-SNE is useful for local structure, but UMAP may provide a more stable global v
 
 5. Review labels and class balance.
 
-Some classes have far more tracks than others. Balanced sampling or class-weighted loss may be useful for fairer 18-class training.
+Some classes have far more tracks than others. `train_classifier.py --class-weight balanced` enables class-weighted cross entropy for fairer 18-class training.

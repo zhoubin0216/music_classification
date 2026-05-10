@@ -2,16 +2,12 @@
 """Train an MLP genre classifier on frozen MERT features.
 
 The expected input is the ``features.npz`` written by extract_mert_features.py.
-For the intended 10-second setup, first run feature extraction with:
-
-    python3 src/extract_mert_features.py --chunk-seconds 10 --save-chunks \
-        --output-dir datasets/features/mert_gtzan_10s
-
-This script groups chunk-level feature rows by track_id, then performs 5-fold
-cross validation. For each fold, 3 folds are used for training, 1 for
-validation, and 1 for testing, giving an overall 6:2:2 split. By default, the
-fold models are used only for validation/testing estimates; the saved model is
-trained once at the end on all tracks for the median best epoch from CV.
+This script groups feature rows by track_id, so it supports both one feature per
+track and multiple chunk-level features per track. It then performs 5-fold cross
+validation. For each fold, 3 folds are used for training, 1 for validation, and
+1 for testing, giving an overall 6:2:2 split. By default, the fold models are
+used only for validation/testing estimates; the saved model is trained once at
+the end on all tracks for the median best epoch from CV.
 """
 
 from __future__ import annotations
@@ -38,8 +34,8 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 
-DEFAULT_FEATURES_PATH = "datasets/features/chunked_mert_gtzan/features.npz"
-DEFAULT_OUTPUT_DIR = "outputs/mlp_chunked_mert_gtzan"
+DEFAULT_FEATURES_PATH = "datasets/features/mert_gtzan/features.npz"
+DEFAULT_OUTPUT_DIR = "outputs/mlp_mert_gtzan"
 
 
 @dataclass(frozen=True)
@@ -98,6 +94,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--label-smoothing", type=float, default=0.05)
+    parser.add_argument(
+        "--class-weight",
+        choices=["none", "balanced"],
+        default="none",
+        help=(
+            "Loss weighting strategy. Use 'balanced' for imbalanced datasets; "
+            "weights are computed from each training split only."
+        ),
+    )
     parser.add_argument("--max-grad-norm", type=float, default=5.0)
     parser.add_argument("--folds", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
@@ -107,7 +112,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Optional GTZAN index.txt with 'filename ::: artist ::: title'. "
-            "When set, CV uses artist-disjoint StratifiedGroupKFold."
+            "When set, CV uses StratifiedGroupKFold: GTZAN samples are grouped "
+            "by artist, and non-GTZAN samples fall back to filename/source groups."
         ),
     )
     parser.add_argument(
@@ -495,6 +501,24 @@ def filename_from_path(path: str) -> str:
     return Path(path).name
 
 
+def infer_fallback_group(path: str) -> str:
+    """Infer a non-GTZAN source group from filename conventions.
+
+    For sliced files like carnatic_000_002.wav, this groups all segments from
+    carnatic_000 together so they cannot cross train/validation/test splits.
+    """
+    path_obj = Path(path)
+    filename = path_obj.name
+    stem = path_obj.stem
+    parent = path_obj.parent.name
+    parts = stem.split("_")
+    if len(parts) >= 3 and parts[-1].isdigit():
+        source_id = "_".join(parts[:-1])
+    else:
+        source_id = stem or filename
+    return f"fallback::{parent}::{source_id}"
+
+
 def build_gtzan_artist_groups(
     examples: list[TrackExample],
     index_path: Path,
@@ -502,22 +526,33 @@ def build_gtzan_artist_groups(
     filename_to_artist = parse_gtzan_artist_index(index_path)
     groups: list[str] = []
     missing_filenames: list[str] = []
+    artist_groups: set[str] = set()
+    fallback_groups: set[str] = set()
 
     for example in examples:
         filename = filename_from_path(example.path)
         artist = filename_to_artist.get(filename)
         if artist is None:
             missing_filenames.append(filename)
-            artist = f"__unknown_artist__::{filename}"
-        groups.append(artist)
+            group = infer_fallback_group(example.path)
+            fallback_groups.add(group)
+        else:
+            group = f"gtzan_artist::{artist}"
+            artist_groups.add(group)
+        groups.append(group)
 
     groups_array = np.asarray(groups)
+    unique_missing_filenames = sorted(set(missing_filenames))
     summary = {
         "index_path": str(index_path),
         "num_examples": len(examples),
-        "num_artist_groups": int(np.unique(groups_array).size),
+        "num_groups": int(np.unique(groups_array).size),
+        "num_artist_groups": len(artist_groups),
+        "num_fallback_groups": len(fallback_groups),
         "num_missing_artist_entries": len(missing_filenames),
-        "missing_artist_filenames": missing_filenames,
+        "num_unique_missing_artist_filenames": len(unique_missing_filenames),
+        "missing_artist_filenames_sample": unique_missing_filenames[:50],
+        "missing_artist_filenames_truncated": len(unique_missing_filenames) > 50,
     }
     return groups_array, summary
 
@@ -559,12 +594,53 @@ def assert_group_disjoint(
     splits: list[tuple[np.ndarray, np.ndarray, np.ndarray]],
     groups: np.ndarray,
 ) -> None:
-    for fold_id, (train_indices, validation_indices, test_indices) in enumerate(splits, start=1):
+    for fold_id, (train_indices, validation_indices, test_indices) in enumerate(
+        splits, start=1
+    ):
         train_groups = set(groups[train_indices].tolist())
         validation_groups = set(groups[validation_indices].tolist())
         test_groups = set(groups[test_indices].tolist())
-        if train_groups & validation_groups or train_groups & test_groups or validation_groups & test_groups:
+        if (
+            train_groups & validation_groups
+            or train_groups & test_groups
+            or validation_groups & test_groups
+        ):
             raise RuntimeError(f"Artist-group leakage detected in fold {fold_id}")
+
+
+def compute_class_weights(
+    examples: list[TrackExample],
+    train_indices: np.ndarray,
+    num_classes: int,
+    mode: str,
+) -> np.ndarray | None:
+    if mode == "none":
+        return None
+    if mode != "balanced":
+        raise ValueError(f"Unsupported class weight mode: {mode}")
+
+    train_labels = np.asarray(
+        [examples[int(index)].label for index in train_indices], dtype=np.int64
+    )
+    counts = np.bincount(train_labels, minlength=num_classes).astype(np.float32)
+    if np.any(counts == 0):
+        missing = np.where(counts == 0)[0].tolist()
+        raise RuntimeError(f"Training split is missing class indices: {missing}")
+
+    weights = counts.sum() / (num_classes * counts)
+    weights = weights / weights.mean()
+    return weights.astype(np.float32)
+
+
+def make_criterion(
+    class_weights: np.ndarray | None,
+    label_smoothing: float,
+    device: torch.device,
+) -> nn.CrossEntropyLoss:
+    weight_tensor = None
+    if class_weights is not None:
+        weight_tensor = torch.from_numpy(class_weights).to(device)
+    return nn.CrossEntropyLoss(weight=weight_tensor, label_smoothing=label_smoothing)
 
 
 def train_fold(
@@ -593,7 +669,13 @@ def train_fold(
         dropout=args.dropout,
     ).to(device)
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
+    class_weights = compute_class_weights(
+        examples,
+        train_indices,
+        num_classes=len(class_names),
+        mode=args.class_weight,
+    )
+    criterion = make_criterion(class_weights, args.label_smoothing, device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,
@@ -721,7 +803,13 @@ def train_fold(
         "num_train": int(len(train_indices)),
         "num_validation": int(len(validation_indices)),
         "num_test": int(len(test_indices)),
+        "class_weight": args.class_weight,
     }
+    if class_weights is not None:
+        fold_metrics["class_weights"] = {
+            class_name: float(weight)
+            for class_name, weight in zip(class_names, class_weights)
+        }
 
     prediction_rows: list[dict[str, object]] = []
     for split_name, (loss, labels, predictions, track_indices) in split_outputs.items():
@@ -813,7 +901,13 @@ def train_final_model(
         aggregation_hidden_dim=args.aggregation_hidden_dim,
         dropout=args.dropout,
     ).to(device)
-    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
+    class_weights = compute_class_weights(
+        examples,
+        all_indices,
+        num_classes=len(class_names),
+        mode=args.class_weight,
+    )
+    criterion = make_criterion(class_weights, args.label_smoothing, device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr,
@@ -861,6 +955,8 @@ def train_final_model(
             "standardizer_std": standardizer.std,
             "feature_path": str(args.features),
             "final_epochs": final_epochs,
+            "class_weight": args.class_weight,
+            "class_weights": class_weights,
             "args": vars(args),
         },
         final_model_path,
@@ -877,6 +973,15 @@ def train_final_model(
         "num_train": len(examples),
         "last_train_accuracy": history[-1]["train_accuracy"] if history else None,
         "last_train_macro_f1": history[-1]["train_macro_f1"] if history else None,
+        "class_weight": args.class_weight,
+        "class_weights": (
+            {
+                class_name: float(weight)
+                for class_name, weight in zip(class_names, class_weights)
+            }
+            if class_weights is not None
+            else None
+        ),
     }
 
 
@@ -940,12 +1045,17 @@ def main() -> int:
     groups: np.ndarray | None = None
     group_summary: dict[str, object] | None = None
     if args.gtzan_artist_index is not None:
-        groups, group_summary = build_gtzan_artist_groups(examples, args.gtzan_artist_index)
-        print(
-            "Using artist-filtered GTZAN splits: "
-            f"{group_summary['num_artist_groups']} artist groups, "
-            f"{group_summary['num_missing_artist_entries']} missing index entries"
+        groups, group_summary = build_gtzan_artist_groups(
+            examples, args.gtzan_artist_index
         )
+        print(
+            "Using group-aware splits: "
+            f"{group_summary['num_groups']} total groups, "
+            f"{group_summary['num_artist_groups']} GTZAN artist groups, "
+            f"{group_summary['num_fallback_groups']} fallback groups"
+        )
+    if args.class_weight != "none":
+        print(f"Using class-weighted cross entropy: {args.class_weight}")
 
     splits = build_cv_splits(labels, folds=args.folds, seed=args.seed, groups=groups)
     if groups is not None:
@@ -975,9 +1085,10 @@ def main() -> int:
         all_prediction_rows.extend(prediction_rows)
 
     summary = summarize(all_fold_metrics, include_folds=args.save_fold_artifacts)
+    summary["class_weight"] = args.class_weight
     if group_summary is not None:
         summary["group_split"] = group_summary
-        summary["split_strategy"] = "stratified_group_kfold_by_artist"
+        summary["split_strategy"] = "stratified_group_kfold_artist_and_source"
     else:
         summary["split_strategy"] = "stratified_kfold_random_tracks"
 
