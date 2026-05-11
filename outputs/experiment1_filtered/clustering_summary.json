@@ -1,0 +1,18 @@
+{
+  "num_clusters": 8,
+  "label_reference": "eastern_genre",
+  "spaces": {
+    "raw_mert": {
+      "adjusted_rand_index": 0.48193070936136084,
+      "normalized_mutual_info": 0.5897442015470109
+    },
+    "mlp_pooled": {
+      "adjusted_rand_index": 0.48193070936136084,
+      "normalized_mutual_info": 0.5897442015470109
+    },
+    "mlp_penultimate": {
+      "adjusted_rand_index": 0.2550098594417751,
+      "normalized_mutual_info": 0.3505815551401326
+    }
+  }
+}

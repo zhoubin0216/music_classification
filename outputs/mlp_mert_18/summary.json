@@ -1,0 +1,20 @@
+{
+  "num_folds": 5,
+  "test_accuracy_mean": 0.8758842443729904,
+  "test_accuracy_std": 0.012005244181732797,
+  "test_macro_f1_mean": 0.8066137939612096,
+  "test_macro_f1_std": 0.02262889391708308,
+  "validation_macro_f1_mean": 0.8181650289168321,
+  "validation_macro_f1_std": 0.011104565820273206,
+  "median_best_epoch": 45,
+  "final_model": {
+    "model_path": "outputs/mlp_chunked_mert_gtzan/final_model.pt",
+    "final_epochs": 45,
+    "input_shape": [
+      768
+    ],
+    "num_train": 3110,
+    "last_train_accuracy": 0.8340836012861736,
+    "last_train_macro_f1": 0.752889766574962
+  }
+}

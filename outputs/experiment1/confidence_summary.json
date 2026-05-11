@@ -1,0 +1,115 @@
+{
+  "num_tracks": 2111,
+  "mean_confidence": 0.5683094263076782,
+  "std_confidence": 0.2228061407804489,
+  "mean_entropy": 1.3267043828964233,
+  "std_entropy": 0.5330589413642883,
+  "max_entropy_for_10_classes": 2.302585092994046,
+  "by_eastern_genre": {
+    "carnatic": {
+      "num_tracks": 458,
+      "mean_confidence": 0.4384163022041321,
+      "std_confidence": 0.16247884929180145,
+      "mean_entropy": 1.6519460678100586,
+      "std_entropy": 0.3309471309185028,
+      "top_projected_western_genre": "hiphop",
+      "top_projected_count": 160,
+      "top_projected_proportion": 0.34934497816593885
+    },
+    "cpop": {
+      "num_tracks": 100,
+      "mean_confidence": 0.7314301133155823,
+      "std_confidence": 0.1873968541622162,
+      "mean_entropy": 0.8291148543357849,
+      "std_entropy": 0.4223652184009552,
+      "top_projected_western_genre": "pop",
+      "top_projected_count": 82,
+      "top_projected_proportion": 0.82
+    },
+    "enka": {
+      "num_tracks": 117,
+      "mean_confidence": 0.5475789308547974,
+      "std_confidence": 0.19732718169689178,
+      "mean_entropy": 1.3413718938827515,
+      "std_entropy": 0.46527794003486633,
+      "top_projected_western_genre": "pop",
+      "top_projected_count": 57,
+      "top_projected_proportion": 0.48717948717948717
+    },
+    "guqinguzheng": {
+      "num_tracks": 434,
+      "mean_confidence": 0.5242377519607544,
+      "std_confidence": 0.20375779271125793,
+      "mean_entropy": 1.4445345401763916,
+      "std_entropy": 0.466431200504303,
+      "top_projected_western_genre": "classical",
+      "top_projected_count": 298,
+      "top_projected_proportion": 0.6866359447004609
+    },
+    "jingju": {
+      "num_tracks": 390,
+      "mean_confidence": 0.6193040013313293,
+      "std_confidence": 0.20369264483451843,
+      "mean_entropy": 1.284115195274353,
+      "std_entropy": 0.4807499349117279,
+      "top_projected_western_genre": "classical",
+      "top_projected_count": 329,
+      "top_projected_proportion": 0.8435897435897436
+    },
+    "jpop": {
+      "num_tracks": 204,
+      "mean_confidence": 0.5960280299186707,
+      "std_confidence": 0.2091730684041977,
+      "mean_entropy": 1.1975147724151611,
+      "std_entropy": 0.4740269184112549,
+      "top_projected_western_genre": "pop",
+      "top_projected_count": 110,
+      "top_projected_proportion": 0.5392156862745098
+    },
+    "kpop": {
+      "num_tracks": 298,
+      "mean_confidence": 0.7589238286018372,
+      "std_confidence": 0.20841017365455627,
+      "mean_entropy": 0.8307304382324219,
+      "std_entropy": 0.5700915455818176,
+      "top_projected_western_genre": "pop",
+      "top_projected_count": 261,
+      "top_projected_proportion": 0.8758389261744967
+    },
+    "sitar": {
+      "num_tracks": 110,
+      "mean_confidence": 0.408181369304657,
+      "std_confidence": 0.14977174997329712,
+      "mean_entropy": 1.6785987615585327,
+      "std_entropy": 0.2855469286441803,
+      "top_projected_western_genre": "pop",
+      "top_projected_count": 48,
+      "top_projected_proportion": 0.43636363636363634
+    }
+  },
+  "western_model": "outputs/mlp_mert_gtzan/final_model.pt",
+  "eastern_features": "datasets/features/mert_eastern/features.npz",
+  "output_dir": "outputs/experiment1_western_bias_probe",
+  "western_class_names": [
+    "blues",
+    "classical",
+    "country",
+    "disco",
+    "hiphop",
+    "jazz",
+    "metal",
+    "pop",
+    "reggae",
+    "rock"
+  ],
+  "eastern_class_names": [
+    "carnatic",
+    "cpop",
+    "enka",
+    "guqinguzheng",
+    "jingju",
+    "jpop",
+    "kpop",
+    "sitar"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "num_folds": 5,
+  "test_accuracy_mean": 0.6248589664130652,
+  "test_accuracy_std": 0.0571285393530468,
+  "test_macro_f1_mean": 0.5886329092283356,
+  "test_macro_f1_std": 0.0531484483194924,
+  "validation_macro_f1_mean": 0.5870666620172413,
+  "validation_macro_f1_std": 0.09638236926358144,
+  "median_best_epoch": 29,
+  "group_split": {
+    "index_path": "datasets/gtzan_meta/index.txt",
+    "num_examples": 999,
+    "num_artist_groups": 287,
+    "num_missing_artist_entries": 16,
+    "missing_artist_filenames": [
+      "classical.00061.wav",
+      "classical.00062.wav",
+      "country.00002.wav",
+      "country.00030.wav",
+      "disco.00084.wav",
+      "jazz.00047.wav",
+      "jazz.00048.wav",
+      "jazz.00050.wav",
+      "jazz.00056.wav",
+      "jazz.00061.wav",
+      "jazz.00064.wav",
+      "jazz.00066.wav",
+      "jazz.00093.wav",
+      "metal.00011.wav",
+      "metal.00023.wav",
+      "pop.00014.wav"
+    ]
+  },
+  "split_strategy": "stratified_group_kfold_by_artist",
+  "final_model": {
+    "model_path": "outputs/mlp_mert_gtzan_artist_filtered/final_model.pt",
+    "final_epochs": 29,
+    "input_shape": [
+      768
+    ],
+    "num_train": 999,
+    "last_train_accuracy": 0.7987987987987988,
+    "last_train_macro_f1": 0.7990298980515965
+  }
+}
