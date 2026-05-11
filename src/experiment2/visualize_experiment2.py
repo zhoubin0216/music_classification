@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 
 
 DEFAULT_FEATURES = "datasets/features/mert_mixed_18/features.npz"
-DEFAULT_RESULTS_DIR = "outputs/mlp_mert_18"
+DEFAULT_RESULTS_DIR = "outputs/mlp_mert_18_artist_filtered_weighted"
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,8 +90,12 @@ def get_test_predictions(rows: list[dict[str, str]]) -> tuple[np.ndarray, np.nda
     test_rows = [row for row in rows if row["split"] == "test"]
     if not test_rows:
         raise ValueError("cv_predictions.csv contains no rows with split == 'test'")
-    true_labels = np.asarray([int(row["true_label"]) for row in test_rows], dtype=np.int64)
-    pred_labels = np.asarray([int(row["pred_label"]) for row in test_rows], dtype=np.int64)
+    true_labels = np.asarray(
+        [int(row["true_label"]) for row in test_rows], dtype=np.int64
+    )
+    pred_labels = np.asarray(
+        [int(row["pred_label"]) for row in test_rows], dtype=np.int64
+    )
     return true_labels, pred_labels
 
 
@@ -155,18 +159,24 @@ def plot_per_class_f1(
         zero_division=0,
     )
     f1_scores = np.asarray([report[name]["f1-score"] for name in class_names])
-    colors = ["#4c78a8" if region == "western" else "#f58518" for region in class_regions]
+    colors = [
+        "#4c78a8" if region == "western" else "#f58518" for region in class_regions
+    ]
     order = np.argsort(f1_scores)
 
     plt.figure(figsize=(9, max(5, 0.38 * len(class_names))))
-    plt.barh(np.arange(len(class_names)), f1_scores[order], color=[colors[i] for i in order])
+    plt.barh(
+        np.arange(len(class_names)), f1_scores[order], color=[colors[i] for i in order]
+    )
     plt.yticks(np.arange(len(class_names)), [class_names[i] for i in order])
     plt.xlabel("F1-score")
     plt.xlim(0, 1)
     plt.title("Per-class F1 on cross-validated test folds")
     savefig(output_dir / "per_class_f1.png", dpi)
 
-    with (output_dir / "classification_report_test.json").open("w", encoding="utf-8") as handle:
+    with (output_dir / "classification_report_test.json").open(
+        "w", encoding="utf-8"
+    ) as handle:
         json.dump(report, handle, indent=2)
 
 
@@ -179,9 +189,15 @@ def plot_region_confusion(
 ) -> None:
     region_names = ["western", "eastern"]
     region_to_id = {name: index for index, name in enumerate(region_names)}
-    true_regions = np.asarray([region_to_id[class_regions[label]] for label in true_labels])
-    pred_regions = np.asarray([region_to_id[class_regions[label]] for label in pred_labels])
-    matrix = confusion_matrix(true_regions, pred_regions, labels=np.arange(len(region_names)))
+    true_regions = np.asarray(
+        [region_to_id[class_regions[label]] for label in true_labels]
+    )
+    pred_regions = np.asarray(
+        [region_to_id[class_regions[label]] for label in pred_labels]
+    )
+    matrix = confusion_matrix(
+        true_regions, pred_regions, labels=np.arange(len(region_names))
+    )
     normalized = matrix / matrix.sum(axis=1, keepdims=True).clip(min=1)
 
     plt.figure(figsize=(5.5, 4.8))
@@ -205,7 +221,9 @@ def plot_region_confusion(
     savefig(output_dir / "region_confusion_matrix.png", dpi)
 
 
-def group_track_features(data: np.lib.npyio.NpzFile) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def group_track_features(
+    data: np.lib.npyio.NpzFile,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     features = data["features"].astype(np.float32)
     labels = data["labels"].astype(np.int64)
     if "track_ids" in data.files:
@@ -239,13 +257,17 @@ def reduce_to_2d(features: np.ndarray, method: str, seed: int) -> np.ndarray:
         _, _, vh = np.linalg.svd(scaled, full_matrices=False)
         return (scaled @ vh[:2].T).astype(np.float32)
     perplexity = min(30, max(5, (len(features) - 1) // 3))
-    return TSNE(
-        n_components=2,
-        perplexity=perplexity,
-        init="pca",
-        learning_rate="auto",
-        random_state=seed,
-    ).fit_transform(scaled).astype(np.float32)
+    return (
+        TSNE(
+            n_components=2,
+            perplexity=perplexity,
+            init="pca",
+            learning_rate="auto",
+            random_state=seed,
+        )
+        .fit_transform(scaled)
+        .astype(np.float32)
+    )
 
 
 def scatter_by_labels(
@@ -290,7 +312,9 @@ def scatter_by_region(
     colors = {"western": "#4c78a8", "eastern": "#f58518"}
     plt.figure(figsize=(8, 6.5))
     for region in region_names:
-        region_labels = [idx for idx, value in enumerate(class_regions) if value == region]
+        region_labels = [
+            idx for idx, value in enumerate(class_regions) if value == region
+        ]
         mask = np.isin(labels, region_labels)
         plt.scatter(
             coords[mask, 0],
@@ -352,7 +376,9 @@ def main() -> int:
     true_labels, pred_labels = get_test_predictions(prediction_rows)
 
     plot_confusion_matrices(true_labels, pred_labels, class_names, output_dir, args.dpi)
-    plot_per_class_f1(true_labels, pred_labels, class_names, class_regions, output_dir, args.dpi)
+    plot_per_class_f1(
+        true_labels, pred_labels, class_names, class_regions, output_dir, args.dpi
+    )
     plot_region_confusion(true_labels, pred_labels, class_regions, output_dir, args.dpi)
     plot_feature_embedding(
         args.features,
