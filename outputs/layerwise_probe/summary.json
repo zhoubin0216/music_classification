@@ -1,0 +1,201 @@
+{
+  "args": {
+    "western_features": "datasets/features/mert_gtzan_all_layers/features.npz",
+    "eastern_features": "datasets/features/mert_eastern_all_layers/features.npz",
+    "output_dir": "outputs/layerwise_probe",
+    "gtzan_artist_index": "datasets/gtzan_meta/index.txt",
+    "no_group_split": false,
+    "include_embedding": false,
+    "class_weight": "balanced",
+    "folds": 5,
+    "seed": 42,
+    "c": 1.0,
+    "max_iter": 2000,
+    "dpi": 180
+  },
+  "western_features": "datasets/features/mert_gtzan_all_layers/features.npz",
+  "eastern_features": "datasets/features/mert_eastern_all_layers/features.npz",
+  "num_saved_layers": 13,
+  "probed_layers": [
+    {
+      "mert_layer": 1,
+      "saved_layer_index": 1
+    },
+    {
+      "mert_layer": 2,
+      "saved_layer_index": 2
+    },
+    {
+      "mert_layer": 3,
+      "saved_layer_index": 3
+    },
+    {
+      "mert_layer": 4,
+      "saved_layer_index": 4
+    },
+    {
+      "mert_layer": 5,
+      "saved_layer_index": 5
+    },
+    {
+      "mert_layer": 6,
+      "saved_layer_index": 6
+    },
+    {
+      "mert_layer": 7,
+      "saved_layer_index": 7
+    },
+    {
+      "mert_layer": 8,
+      "saved_layer_index": 8
+    },
+    {
+      "mert_layer": 9,
+      "saved_layer_index": 9
+    },
+    {
+      "mert_layer": 10,
+      "saved_layer_index": 10
+    },
+    {
+      "mert_layer": 11,
+      "saved_layer_index": 11
+    },
+    {
+      "mert_layer": 12,
+      "saved_layer_index": 12
+    }
+  ],
+  "western_classes": [
+    "blues",
+    "classical",
+    "country",
+    "disco",
+    "hiphop",
+    "jazz",
+    "metal",
+    "pop",
+    "reggae",
+    "rock"
+  ],
+  "eastern_classes": [
+    "carnatic",
+    "cpop",
+    "enka",
+    "guqinguzheng",
+    "jingju",
+    "jpop",
+    "kpop",
+    "sitar"
+  ],
+  "western_group_split": {
+    "index_path": "datasets/gtzan_meta/index.txt",
+    "num_examples": 999,
+    "num_groups": 287,
+    "num_artist_groups": 271,
+    "num_fallback_groups": 16,
+    "num_missing_artist_entries": 16,
+    "num_unique_missing_artist_filenames": 16,
+    "missing_artist_filenames_sample": [
+      "classical.00061.wav",
+      "classical.00062.wav",
+      "country.00002.wav",
+      "country.00030.wav",
+      "disco.00084.wav",
+      "jazz.00047.wav",
+      "jazz.00048.wav",
+      "jazz.00050.wav",
+      "jazz.00056.wav",
+      "jazz.00061.wav",
+      "jazz.00064.wav",
+      "jazz.00066.wav",
+      "jazz.00093.wav",
+      "metal.00011.wav",
+      "metal.00023.wav",
+      "pop.00014.wav"
+    ],
+    "missing_artist_filenames_truncated": false
+  },
+  "eastern_group_split": {
+    "index_path": "datasets/gtzan_meta/index.txt",
+    "num_examples": 563,
+    "num_groups": 563,
+    "num_artist_groups": 0,
+    "num_fallback_groups": 563,
+    "num_missing_artist_entries": 563,
+    "num_unique_missing_artist_filenames": 563,
+    "missing_artist_filenames_sample": [
+      "cpop_000.wav",
+      "cpop_001.wav",
+      "cpop_002.wav",
+      "cpop_003.wav",
+      "cpop_004.wav",
+      "cpop_005.wav",
+      "cpop_006.wav",
+      "cpop_007.wav",
+      "cpop_008.wav",
+      "cpop_009.wav",
+      "cpop_010.wav",
+      "cpop_011.wav",
+      "cpop_012.wav",
+      "cpop_013.wav",
+      "cpop_014.wav",
+      "cpop_015.wav",
+      "cpop_016.wav",
+      "cpop_017.wav",
+      "cpop_018.wav",
+      "cpop_019.wav",
+      "cpop_020.wav",
+      "cpop_021.wav",
+      "cpop_022.wav",
+      "cpop_023.wav",
+      "cpop_024.wav",
+      "cpop_025.wav",
+      "cpop_026.wav",
+      "cpop_027.wav",
+      "cpop_028.wav",
+      "cpop_029.wav",
+      "cpop_030.wav",
+      "cpop_031.wav",
+      "cpop_032.wav",
+      "cpop_033.wav",
+      "cpop_034.wav",
+      "cpop_035.wav",
+      "cpop_036.wav",
+      "cpop_037.wav",
+      "cpop_038.wav",
+      "cpop_039.wav",
+      "cpop_040.wav",
+      "cpop_041.wav",
+      "cpop_042.wav",
+      "cpop_043.wav",
+      "cpop_044.wav",
+      "cpop_045.wav",
+      "cpop_046.wav",
+      "cpop_047.wav",
+      "cpop_048.wav",
+      "cpop_049.wav"
+    ],
+    "missing_artist_filenames_truncated": true
+  },
+  "best_western_layer": {
+    "dataset": "western",
+    "mert_layer": 7,
+    "test_accuracy_mean": 0.7845922173402358,
+    "test_accuracy_std": 0.04725562870230998,
+    "test_macro_f1_mean": 0.7250568948240504,
+    "test_macro_f1_std": 0.04553279618505242,
+    "validation_macro_f1_mean": 0.7176768761507833,
+    "validation_macro_f1_std": 0.04515600537101403
+  },
+  "best_eastern_layer": {
+    "dataset": "eastern",
+    "mert_layer": 5,
+    "test_accuracy_mean": 0.927212389380531,
+    "test_accuracy_std": 0.01709050157011864,
+    "test_macro_f1_mean": 0.8939907943290137,
+    "test_macro_f1_std": 0.030850542058425745,
+    "validation_macro_f1_mean": 0.8836859221253844,
+    "validation_macro_f1_std": 0.046301993353166294
+  }
+}

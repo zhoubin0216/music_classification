@@ -1,0 +1,36 @@
+{
+  "data_root": "datasets/audios/western_data/genres_original",
+  "output_dir": "datasets/features/mert_gtzan_all_layers",
+  "model_name": "m-a-p/MERT-v1-95M",
+  "device": "cuda",
+  "layer": "all",
+  "save_all_layers": true,
+  "save_chunks": false,
+  "chunk_seconds": 30.0,
+  "min_chunk_seconds": 1.0,
+  "extensions": [
+    ".wav"
+  ],
+  "max_files_per_class": null,
+  "num_input_files": 1000,
+  "num_successful_tracks": 999,
+  "num_feature_rows": 999,
+  "num_failed_files": 1,
+  "feature_shape": [
+    999,
+    13,
+    768
+  ],
+  "class_names": [
+    "blues",
+    "classical",
+    "country",
+    "disco",
+    "hiphop",
+    "jazz",
+    "metal",
+    "pop",
+    "reggae",
+    "rock"
+  ]
+}
