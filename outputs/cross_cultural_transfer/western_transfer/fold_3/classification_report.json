@@ -1,0 +1,63 @@
+{
+  "carnatic": {
+    "precision": 0.6717557251908397,
+    "recall": 0.9565217391304348,
+    "f1-score": 0.7892376681614349,
+    "support": 92.0
+  },
+  "cpop": {
+    "precision": 0.875,
+    "recall": 0.35,
+    "f1-score": 0.5,
+    "support": 20.0
+  },
+  "enka": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1-score": 0.0,
+    "support": 27.0
+  },
+  "guqinguzheng": {
+    "precision": 0.6304347826086957,
+    "recall": 0.6823529411764706,
+    "f1-score": 0.655367231638418,
+    "support": 85.0
+  },
+  "jingju": {
+    "precision": 0.8064516129032258,
+    "recall": 0.6756756756756757,
+    "f1-score": 0.7352941176470589,
+    "support": 74.0
+  },
+  "jpop": {
+    "precision": 0.53125,
+    "recall": 0.37777777777777777,
+    "f1-score": 0.44155844155844154,
+    "support": 45.0
+  },
+  "kpop": {
+    "precision": 0.46808510638297873,
+    "recall": 0.7213114754098361,
+    "f1-score": 0.567741935483871,
+    "support": 61.0
+  },
+  "sitar": {
+    "precision": 0.25,
+    "recall": 0.05,
+    "f1-score": 0.08333333333333333,
+    "support": 20.0
+  },
+  "accuracy": 0.625,
+  "macro avg": {
+    "precision": 0.5291221533857174,
+    "recall": 0.4767049511462743,
+    "f1-score": 0.4715665909778197,
+    "support": 424.0
+  },
+  "weighted avg": {
+    "precision": 0.5896824152912661,
+    "recall": 0.625,
+    "f1-score": 0.5870209893096995,
+    "support": 424.0
+  }
+}
