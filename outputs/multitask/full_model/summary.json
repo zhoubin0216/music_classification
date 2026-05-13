@@ -1,0 +1,9 @@
+{
+  "best_epoch": 10,
+  "best_val_f1": 0.7870741260099704,
+  "test_accuracy": 0.8592,
+  "test_macro_f1": 0.805479533224129,
+  "multitask_enabled": true,
+  "hard_mining_enabled": true,
+  "hard_mining_weight": 2.0
+}
