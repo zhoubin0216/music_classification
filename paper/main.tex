@@ -16,6 +16,8 @@
 \usepackage{array}
 \usepackage{enumitem}
 \usepackage{float}
+\usepackage{newunicodechar}
+\newunicodechar{↳}{$\hookrightarrow$}
 
 \title{Cross-Cultural Music Representation Learning with Deep Audio Models}
 
@@ -36,19 +38,9 @@
 \begin{document}
 
 \maketitle
-\begin{center}
- \includegraphics[width=1.0\linewidth]{teaser.png}
-\end{center}
-
-\vspace{-0.5em}
-
-\begin{quote}
-\small
-Overview of the cross-cultural music representation learning framework based on deep audio models. The pipeline consists of three main modules from left to right: (1) preprocessing and input of cross-cultural audio data; (2) multi-layer feature extraction using the MERT foundation model to generate both global and token-level representations; and (3) four core experiments (baseline classification, transfer adaptation, classifier improvement, and layer-wise analysis) designed to evaluate and enhance cross-cultural music understanding, alongside key qualitative findings.
-\end{quote}
 
 \begin{abstract}
-Recent foundation models for music understanding have demonstrated strong performance on a wide range of Music Information Retrieval (MIR) tasks. However, most existing benchmarks and pretraining corpora are heavily biased toward Western music traditions, making it unclear whether these models truly learn culturally generalizable music representations. In this work, we investigate cross-cultural music representation learning using MERT, a large-scale music foundation model, across both Western and Eastern musical genres. Since no unified benchmark currently exists for this task, we first construct a balanced cross-cultural dataset containing Western popular genres and multiple Eastern traditional and modern genres. We then perform a series of experiments including baseline classification, transfer learning, multi-task learning, confusion-aware hard mining, and layer-wise representation analysis. Our results show that MERT learns highly discriminative representations for traditional music genres, while modern genres from different cultures exhibit stronger overlap in latent space. Furthermore, direct transfer from Western music classifiers to Eastern genres produces significant negative transfer effects, suggesting that Western-centric representations do not generalize well to culturally distinct musical structures. Visualization analysis using t-SNE projections and confusion matrices further reveals that traditional music retains strong cultural separability, whereas modern popular music exhibits increasing convergence across regions. These findings provide new insights into the cultural biases and representational properties of music foundation models.
+Music foundation models achieve strong results on Music Information Retrieval (MIR) tasks, but their benchmarks and pretraining corpora are dominated by Western music, leaving their cross-cultural generalization unclear. We study this question with MERT, a large-scale music foundation model, by constructing a balanced 18-genre dataset that spans Western and Eastern traditional and modern styles. Across baseline classification, cross-cultural transfer, multi-task learning, confusion-aware hard mining, and layer-wise probing, we find that MERT separates traditional genres well but represents modern popular genres from different regions with substantial overlap. Transferring Western-trained classifiers to Eastern music causes clear negative transfer, and layer-wise analysis shows that MERT's mid-to-deep layers are shaped by Western musical structure. t-SNE and confusion-matrix visualizations corroborate these findings. Overall, current music foundation models still encode meaningful cultural biases, underscoring the need for culturally diverse training corpora and benchmarks.
 \end{abstract}
 
 \section{Introduction}
@@ -57,80 +49,42 @@ Recent years have witnessed rapid progress in foundation models for music repres
 
 At the same time, globalization and industrialized music production have caused modern popular music genres from different regions to become increasingly similar in timbre and production style. In contrast, many traditional music genres still preserve strong regional and cultural uniqueness. This raises an interesting representation learning question: how do foundation music models organize traditional and modern music from different cultures in latent space?
 
-To investigate this problem, we construct a unified cross-cultural music dataset containing both Western and Eastern genres, including traditional and modern music styles from China, Japan, Korea, India, and Western popular music. Based on representations extracted from MERT, we conduct a series of experiments including baseline genre classification, cross-cultural transfer learning, multi-task learning, confusion-aware hard mining, and layer-wise representation analysis.
+To investigate this problem, we construct a unified cross-cultural music dataset of Western and Eastern genres---traditional and modern styles from China, Japan, Korea, India, and the West---and, using representations extracted from MERT, conduct baseline genre classification, cross-cultural transfer learning, multi-task learning, confusion-aware hard mining, and layer-wise representation analysis.
 
-Our experiments reveal several important findings. First, MERT already learns highly discriminative representations for many traditional music genres. Second, directly transferring Western-trained genre representations to Eastern music introduces strong negative transfer effects. Third, modern popular genres from different cultural regions exhibit significantly stronger overlap in latent space compared to traditional music genres. Finally, middle layers of MERT capture the most discriminative cultural information.
-
-Our main contributions are summarized as follows:
+Our main contributions are as follows:
 \begin{itemize}[leftmargin=*]
- \item We construct a unified cross-cultural music dataset containing both Western and Eastern music genres.
+ \item We construct a unified cross-cultural music dataset of 18 Western and Eastern genres.
 
- \item We systematically investigate how MERT represents culturally distinct musical structures through classification, transfer learning, and layer-wise analysis.
+ \item We systematically analyze how MERT represents culturally distinct music through classification, transfer learning, and layer-wise probing.
 
- \item We show that traditional music genres remain highly separable in latent space, while modern popular music exhibits increasing cross-cultural convergence.
+ \item We show that traditional genres remain highly separable in latent space while modern popular music converges across cultures, and that Western-trained representations transfer negatively to Eastern music.
 \end{itemize}
 
 \section{Dataset Construction}
 \subsection{Dataset Collecting}
 
-A major limitation in cross-cultural MIR research is the lack of a unified benchmark containing both Western and Eastern music genres. To address this issue, we construct a cross-cultural music dataset by combining multiple data sources (Table~\ref{tab:western_genres} and Table~\ref{tab:eastern_genres}).
+A major limitation in cross-cultural MIR research is the lack of a unified benchmark containing both Western and Eastern music genres. To address this issue, we construct a cross-cultural music dataset containing 18 genres from Western and Eastern music traditions, where the Eastern subset spans four cultural regions (Table~\ref{tab:dataset}).
 
-The Western subset is mainly derived from the GTZAN dataset~\cite{tzanetakis2002musical}, while the Carnatic genre is collected from a public Carnatic music dataset~\cite{krishnan2025sanidha}. The remaining Eastern genres are collected from Bilibili, where we manually selected high-quality and genre-consistent recordings. Only videos marked as reprintable or openly reusable were included to ensure ethical compliance for academic research. This design intentionally includes both culturally distinctive traditional genres and globally influenced modern genres.
+The Western subset is mainly derived from the GTZAN dataset~\cite{tzanetakis2002musical}, while the Carnatic genre is collected from a public Carnatic music dataset~\cite{krishnan2025sanidha}. The remaining Eastern genres are collected from Bilibili, where we manually selected high-quality and genre-consistent recordings. Only videos marked as reprintable or openly reusable were included to ensure ethical compliance for academic research. The dataset intentionally mixes culturally distinctive traditional genres---Classical, Carnatic, Sitar, Guzheng/Guqin, Jingju, and Enka---with globally influenced modern popular genres, so that cultural separability can be studied across both categories.
 \begin{table}[h]
 \centering
-\caption{Western music genres included in our dataset.}
-\label{tab:western_genres}
+\caption{Cross-cultural music dataset: 18 genres from Western and Eastern music traditions, where the Eastern subset spans four cultural regions.}
+\label{tab:dataset}
 \small
-\begin{tabular}{p{1.2cm} p{1.0cm} p{10.5cm}}
+\begin{tabular}{l l c @{\hspace{2.5em}} l l c}
 \toprule
-\textbf{Genre} & \textbf{Samples} & \textbf{Description} \\
+\textbf{Genre} & \textbf{Region} & \textbf{Samples} & \textbf{Genre} & \textbf{Region} & \textbf{Samples} \\
 \midrule
-Blues & 100 & African-American music genre characterized by expressive vocals and blues harmony. \\
-
-Classical & 100 & Western art music emphasizing orchestral composition and formal structure. \\
-
-Country & 100 & Folk-inspired American genre featuring acoustic instruments and narrative lyrics. \\
-
-Disco & 100 & Dance-oriented popular music with strong rhythmic grooves and electronic production. \\
-
-Hiphop & 100 & Rhythm-focused genre combining rap vocals, beat production, and sampling culture. \\
-
-Jazz & 100 & Improvisation-centered genre characterized by swing rhythm and harmonic complexity. \\
-
-Metal & 100 & Aggressive rock subgenre featuring distorted guitars and high-energy instrumentation. \\
-
-Pop & 100 & Mainstream commercial music emphasizing catchy melodies and modern production. \\
-
-Reggae & 100 & Jamaican genre known for offbeat rhythms and relaxed groove patterns. \\
-
-Rock & 100 & Guitar-driven popular music genre with strong rhythmic energy and band instrumentation. \\
-\bottomrule
-\end{tabular}
-\end{table}
-\begin{table}[h]
-\centering
-\caption{Eastern music genres included in our dataset.}
-\label{tab:eastern_genres}
-\small
-\begin{tabular}{p{1.2cm} p{1.0cm} p{10.5cm}}
-\toprule
-\textbf{Genre} & \textbf{Samples} & \textbf{Description} \\
-\midrule
-Carnatic & 100 & South Indian classical music tradition characterized by complex rhythmic structures and vocal ornamentation. \\
-
-Guzheng / Guqin & 100 & Traditional Chinese plucked string instrumental music emphasizing melodic expression and timbral subtlety. \\
-
-Jingju & 100 & The dominant form of Chinese opera combining stylized singing, percussion, and theatrical performance. \\
-
-Sitar & 55 & North Indian classical instrumental music centered around the sitar and raga-based improvisation. \\
-
-Enka & 39 & Traditional Japanese popular music style featuring emotional vocal delivery and pentatonic melodies. \\
-
-C-pop & 100 & Contemporary Chinese popular music influenced by global pop production styles. \\
-
-J-pop & 68 & Japanese popular music combining domestic idol culture with modern pop production. \\
-
-K-pop & 100 & Korean popular music genre characterized by highly produced audiovisual performance and global commercial influence. \\
+Blues & Western & 100 & Carnatic & India & 100 \\
+Classical & Western & 100 & Sitar & India & 55 \\
+Country & Western & 100 & Guzheng/Guqin & China & 100 \\
+Disco & Western & 100 & Jingju & China & 100 \\
+Hiphop & Western & 100 & C-pop & China & 100 \\
+Jazz & Western & 100 & Enka & Japan & 39 \\
+Metal & Western & 100 & J-pop & Japan & 68 \\
+Pop & Western & 100 & K-pop & Korea & 100 \\
+Reggae & Western & 100 & & & \\
+Rock & Western & 100 & & & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -147,15 +101,16 @@ We note that prior work routinely overlooks artist-level leakage on GTZAN, leadi
 \begin{figure}
  \centering
  \includegraphics[width=1.0\linewidth]{method.png}
- \caption{Overview of the experimental methodology. Audio tracks are first segmented into 30-second slices and processed by the pretrained MERT encoder to extract latent representations from different transformer layers. Based on these representations, we conduct three baseline genre classification tasks (Western 10-class, Eastern 8-class, and unified 18-class classification) using lightweight MLP classifiers. We further investigate cross-cultural transferability through direct evaluation of Western-trained models on Eastern music and classifier-head replacement experiments. To improve cross-cultural classification, we additionally explore multi-task learning with auxiliary semantic supervision and a confusion-aware hard mining strategy that emphasizes asymmetric difficult genre pairs.}
+ \caption{Overview of the experimental methodology. Audio is segmented into
+ 30-second slices and encoded by a frozen MERT model; lightweight downstream
+ modules then perform baseline classification, cross-cultural transfer,
+ multi-task learning, confusion-aware hard mining, and layer-wise probing.}
  \label{fig:method}
 \end{figure}
 
 \subsection{Feature Extraction with MERT}
 
-We use MERT~\cite{li2024mert} as the backbone representation extractor as shown in Figure~\ref{fig:method}. Audio slices are processed through the pretrained transformer encoder, and hidden representations are extracted from multiple transformer layers.
-
-For most experiments, we use pooled latent representations obtained from the final hidden states. We additionally perform layer-wise analysis by extracting representations from different transformer depths.
+We use MERT~\cite{li2024mert} as the backbone representation extractor as shown in Figure~\ref{fig:method}. Audio slices are processed through the pretrained transformer encoder, and hidden representations are extracted from its transformer layers; the exact layers used in each experiment are specified in Section~4.1.
 
 \subsection{Baseline Classifiers}
 We first establish three baseline tasks: Western 10-class genre classification; Eastern 8-class genre classification; Unified 18-class cross-cultural classification.
@@ -195,10 +150,7 @@ The downstream classifier is a two-layer multilayer perceptron operating on
 the 768-dimensional MERT representation. The architecture is
 $\mathrm{Linear}(768 \!\to\! 64) \to \mathrm{ReLU} \to \mathrm{Dropout}(p\!=\!0.5)
 \to \mathrm{Linear}(64 \!\to\! C)$, where $C$ is the number of target classes
-($10$, $8$, or $18$ depending on the task). Aggregation modules, when used,
-are inserted before the MLP: a learnable softmax-weighted sum over the 12
-transformer-layer outputs (with $16$-dimensional projection head) for layer
-aggregation, and a learnable attention pooling over chunks for chunk aggregation.
+($10$, $8$, or $18$ depending on the task).
 
 \paragraph{Training configuration.}
 Models are optimized with AdamW (learning rate $3\times 10^{-4}$, weight
@@ -256,36 +208,13 @@ reflect the linear separability of each layer's raw representation.
 
 \subsection{Evaluation Metrics}
 
-We report Accuracy, Macro-F1. Macro-F1 is used as the primary evaluation metric because it better reflects performance across both majority and minority genres.
+We report accuracy and macro-F1, with macro-F1 as the primary metric since it better reflects performance across both majority and minority genres.
 
 To better understand the latent geometry learned by MERT~\cite{li2024mert}, we visualize pooled representations using t-SNE dimensionality reduction~\cite{maaten2008visualizing} and analyze normalized confusion matrices to investigate genre-level ambiguities and cultural overlap. These visualizations are used as qualitative evidence rather than as standalone quantitative metrics.
 
 \section{Results}
 
 \subsection{Baseline Classification}
-
-Table~\ref{tab:baselines} summarizes the three baseline classifiers
-under the leakage-safe protocol. Two observations stand out. First, the
-Western 10-class classifier reaches only $58.86\%$ macro-F1, which
-is substantially below the often-reported $\sim$80\% on GTZAN; the
-gap is consistent with the inflation magnitude estimated
-by~\cite{flexer2007closer} and confirms that previous strong results
-on GTZAN partially reflect artist-induced shortcuts rather than genuine
-genre understanding. Second, the Eastern 8-class classifier reaches
-much higher absolute performance ($83.66\%$ macro-F1) than the
-Western baseline, despite using the same backbone and head. As we will
-show in Section~5.4, this gap is not the result of MERT capturing
-richer Eastern semantics; it is primarily because the Eastern classes
-are separable at the lowest transformer layer, indicating that they
-differ in basic acoustic and timbral properties rather than in deeper
-musical abstractions.
-
-The unified 18-class classifier reaches $65.02\%$ macro-F1. When
-broken down by region, the Western subset macro-F1 is $59.13\%$
-and the Eastern subset is $77.09\%$, showing that the per-region
-gap persists in the joint setting and is not an artifact of training
-each subset in isolation.
-
 \begin{table}[h]
 \centering
 \caption{Baseline classification under leakage-safe (artist- and
@@ -305,17 +234,13 @@ Unified 18-class & $0.7791 \pm 0.0181$ & $0.6502 \pm 0.0213$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+Table~\ref{tab:baselines} summarizes the performance of the three baseline classifiers under the leakage-safe evaluation protocol. Two observations can be made. First, the Western 10-class classifier achieves $58.86\%$ macro-F1, which is lower than frequently reported results on GTZAN and is consistent with previous observations regarding potential evaluation bias in music genre classification~\citep{flexer2007closer}. Second, the Eastern 8-class classifier achieves substantially higher performance ($83.66\%$ macro-F1) under the same backbone and classifier setting.
 
+The unified 18-class classifier reaches $65.02\%$ macro-F1. When decomposed by region, the Western subset achieves $59.13\%$ macro-F1 and the Eastern subset achieves $77.09\%$, indicating that the performance difference between the two subsets remains present under joint training.
 
 \subsection{Negative Transfer Effects}
 
-Both transfer learning experiments~\cite{pan2009survey, choi2017transfer} demonstrate clear negative transfer behavior.
-
-Directly applying Western-trained classifiers to Eastern music produces severe performance degradation.
-
-Furthermore, reusing Western-learned feature structures while replacing only the classification head also fails to improve Eastern classification, with the Macro-F1 score dropping significantly from 83.66\% to 52.22\%. This result suggests that representations learned from Western genres introduce strong negative transfer effects when applied to Eastern music understanding.
-
-These findings suggest that representations optimized for Western genre boundaries do not transfer effectively to culturally distinct Eastern music structures.
+Both transfer learning experiments~\citep{pan2009survey,choi2017transfer} exhibit negative transfer behavior. Directly applying a Western-trained classifier to Eastern music severely distorts the original latent-space clustering structure as shown in Figure~\ref{fig:experiment1_tsne}. Furthermore, reusing the Western-learned representation while retraining only the classification head does not recover the baseline performance, with macro-F1 decreasing from $83.66\%$ to $52.22\%$. These results indicate limited transferability of Western-trained representations to Eastern music classification.
 
 \subsection{Multi-Task Learning and Hard Mining}
 \begin{table}[h]
@@ -325,23 +250,23 @@ These findings suggest that representations optimized for Western genre boundari
 \small
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Method} & \textbf{Best Epoch} & \textbf{Test Accuracy} & \textbf{Test Macro-F1} \\
+\textbf{Method} & \textbf{Test Accuracy} & \textbf{Test Macro-F1} \\
 \midrule
-Baseline & 7 & 0.8496 & 0.7818 \\
+Baseline & 0.7791 & 0.6502 \\
 
-Multi-task only & 14 & \textbf{0.8720} & \textbf{0.8189} \\
+Multi-task only & \textbf{0.8720} & \textbf{0.8189} \\
 
-Hard Mining only & 7 & 0.8640 & 0.8118 \\
+Hard Mining only & 0.8640 & 0.8118 \\
 
-Full Model (Multi-task + Hard Mining) & 10 & 0.8592 & 0.8055 \\
+Full Model (Multi-task + Hard Mining) & 0.8592 & 0.8055 \\
 \bottomrule
 \end{tabular}
 \end{table}
-As shown in Table~\ref{tab:ablation}, both multi-task learning~\cite{ruder2017overview} and confusion-aware hard mining~\cite{susmaga2004confusion} improve performance over the baseline model. Multi-task learning achieves the largest gain, improving test Macro-F1 from 0.7818 to 0.8189, while hard mining also provides a noticeable improvement.
+As shown in Table~\ref{tab:ablation}, both multi-task learning~\citep{ruder2017overview} and confusion-aware hard mining~\citep{susmaga2004confusion} improve performance over the baseline model. Multi-task learning achieves the largest improvement, while hard mining also provides measurable gains.
 
-However, combining both approaches does not lead to further gains. One possible explanation is that the two methods provide overlapping supervision signals. The confusion-aware hard mining strategy explicitly emphasizes ambiguous genre pairs such as Enka–Sitar and C-pop–Enka, which partially correspond to higher-level semantic attributes introduced by the auxiliary tasks (e.g., traditional versus modern music and vocal versus instrumental music). Therefore, both approaches may encourage the model to learn similar latent separations, leading to limited complementary effects.
+Combining both methods does not further improve performance. Possible explanations for this observation are discussed in Section~6.
 
-\subsection{Layer-Wise Representation Analysis}
+\subsection{Layer-Wise Representation}
 
 \begin{figure}[h]
  \centering
@@ -354,50 +279,16 @@ However, combining both approaches does not lead to further gains. One possible 
  \caption{Linear-probe performance at each MERT transformer layer.
  Left: test accuracy. Right: test macro-F1. Error bars denote the
  standard deviation across 5 leakage-safe folds. The Western curve
- shows a pronounced hill shape, peaking at layer~7 and declining at
- layers~11--12, consistent with the well-known phenomenon in
- transformer probing literature that the final layers specialize
- toward the pretraining objective. The Eastern curve is near-saturated
- from the very first transformer layer (layer~1 macro-F1 already
- $\approx 0.86$), with only a small additional gain through layer~5.}
+ peaks at layer~7 and declines at layers~11--12, whereas the Eastern
+ curve is near-saturated from layer~1.}
  \label{fig:layerwise}
 \end{figure}
 
-Figure~\ref{fig:layerwise} reveals two qualitatively different
-representations across our two label spaces. For Western genres, the
-discriminative information rises through the early-to-middle layers
-and peaks at layer~7, then degrades by about 10 macro-F1 points by
-layer~12. This pattern matches prior findings that the deepest
-transformer layers of self-supervised audio models become specialized
-toward their masked acoustic reconstruction objective and are no
-longer optimal for downstream genre classification.
+Figure~\ref{fig:layerwise} shows that different MERT layers exhibit different discriminative abilities across the two classification tasks. For Western genres, performance increases from shallow to middle layers and reaches its maximum around the middle transformer layers before decreasing in deeper layers. In contrast, Eastern genres achieve relatively strong performance even in shallow layers, with only limited variation across layers.
 
-The Eastern curve tells a different story. Layer~1 alone---the
-shallowest transformer output, which is closest to raw acoustic
-features---already separates the 8 Eastern classes with macro-F1
-$\approx 0.86$, and the peak at layer~5 only adds about 3 points
-on top. We interpret this as evidence that the Eastern classes in
-our dataset are largely distinguishable by low-level timbral and
-spectral properties (instrument type, vocal vs.\ instrumental,
-production quality) rather than by the deeper rhythmic, harmonic, or
-stylistic abstractions that MERT's middle layers encode. In other
-words, MERT's hierarchical representation is being heavily exercised
-when classifying Western genres but is largely redundant for our
-Eastern label space.
-
-This asymmetry has two consequences for interpreting the rest of our
-results. First, the strong baseline performance on Eastern 8-class
-(Section~5.1) should not be read as ``MERT understands Eastern music
-well''; it is consistent with the Eastern classes being acoustically
-distant from each other for reasons that any shallow audio model
-could exploit. Second, the negative-transfer findings of Section~5.2
-should be understood as MERT's mid-to-deep layers being shaped by
-Western musical structure: when these layers are reused, they remain
-useful for Western classification but fail to provide useful
-inductive bias for Eastern classification.
+These results suggest differences in how the learned representation hierarchy contributes to the two classification settings.
 
 \subsection{Visualization Findings}
-
 \begin{figure}[h]
  \centering
  \begin{minipage}{0.49\linewidth}
@@ -412,13 +303,6 @@ inductive bias for Eastern classification.
 
 \begin{figure}[h]
  \centering
- \includegraphics[width=0.75\linewidth]{projection_heatmap.png}
- \caption{Projection distribution from Eastern genres to Western genre labels using the Western-trained classifier.}
- \label{fig:projection_heatmap}
-\end{figure}
-
-\begin{figure}[h]
- \centering
  \begin{minipage}{0.49\linewidth}
    \includegraphics[width=\linewidth]{confusion_matrix_normalized.png}
  \end{minipage}
@@ -429,36 +313,39 @@ inductive bias for Eastern classification.
  \label{fig:confusion}
 \end{figure}
 
-We further analyze the learned representation space using t-SNE projections and confusion matrices. In the direct Western-to-Eastern probing experiment, the raw MERT space already forms several coherent Eastern genre clusters. Traditional instrumental or opera-related genres such as Guqin/Guzheng, Jingju, Carnatic, and Sitar tend to occupy more distinctive regions, whereas modern popular genres such as C-pop, J-pop, and K-pop show stronger overlap. This suggests that the dominant separations in the representation space are partly driven by timbre, instrumentation, and production style.
+Figure~\ref{fig:confusion} presents confusion analysis of the learned representations. Traditional genres such as Guqin/Guzheng, Jingju, Carnatic, and Sitar exhibit relatively strong separability, whereas modern genres such as C-pop, J-pop, and K-pop show stronger overlap.
 
-After passing Eastern samples through the Western-trained MLP, the penultimate representation becomes more aligned with Western genre boundaries. The projection heatmap shows that modern Eastern popular genres are frequently mapped to Western Pop, while Jingju and Guqin/Guzheng are often projected toward Classical. This behavior supports our negative-transfer interpretation: the Western classifier does not discover Eastern genre semantics, but instead forces Eastern music into the closest available Western categories.
+For the Western-trained classifier applied to Eastern samples, modern Eastern genres are predominantly assigned to Western popular genres, while traditional Eastern genres are more frequently mapped to Western classical categories.
 
-For the unified 18-class classifier, the normalized confusion matrix reveals that errors are not uniformly distributed. Traditional genres such as Jingju, Guqin/Guzheng, Carnatic, and Classical remain relatively separable, while modern and hybrid popular genres exhibit stronger mutual confusion. The region-level confusion matrix further indicates that most errors occur within broad cultural or production-style regions, but cross-region mistakes are more common among modern popular genres than among traditional genres.
+For the unified 18-class classifier, the normalized confusion matrix shows that classification errors are not uniformly distributed across genres. Traditional genres remain relatively separable, whereas stronger mutual confusion is observed among modern genres. The region-level confusion matrix additionally indicates that most errors occur within similar cultural or production-style groups.
 
-Overall, these visualizations reinforce the quantitative results: MERT representations strongly separate acoustically distinctive traditional genres, while modern popular music across regions occupies a more overlapping representation space.
+Overall, the visualization results are consistent with the quantitative findings presented in previous sections.
 
 
 \section{Discussion}
 
-Our experiments suggest that current music foundation models do not learn fully culture-invariant music representations.
+\paragraph{Negative transfer and cultural bias.}
+The transfer learning experiments reveal clear negative transfer effects when Western-trained representations are reused for Eastern music classification~\citep{pan2009survey,choi2017transfer}. Although MERT is pretrained on large-scale music corpora~\citep{li2024mert}, the learned latent space does not appear to be fully culture-invariant. Visualization results further support this observation, showing stronger overlap among modern genres while traditional genres remain relatively separable.
 
-Instead, MERT~\cite{li2024mert} appears to capture a combination of universal acoustic patterns and culturally specific structural priors. Traditional music genres remain highly separable due to distinctive instrumentation, tonal systems, and vocal techniques. In contrast, modern popular genres from different regions exhibit substantially stronger overlap in latent space, likely because globalization and industrial music production have increasingly standardized timbral characteristics and production styles.
+\paragraph{Effect of auxiliary learning strategies.}
+The ablation experiments show that multi-task learning~\citep{ruder2017overview} and confusion-aware hard mining~\citep{susmaga2004confusion} provide measurable improvements but do not fundamentally alter the learned representation structure. Their limited combined effect may indicate partially overlapping supervision signals rather than complementary information. For example, emphasizing difficult pairs such as Enka--Sitar through hard mining may implicitly encourage the model to distinguish vocal and instrumental characteristics, which resembles the role of the vocal-versus-instrumental auxiliary task. Similarly, emphasizing Enka--C-pop confusion may partially align with the traditional-versus-modern auxiliary supervision. These examples suggest that both approaches may guide the model toward similar latent separations, thereby limiting additional gains when combined.
 
-The observed negative transfer~\cite{pan2009survey, choi2017transfer} effects further indicate that representations optimized for Western genre structures do not naturally generalize to culturally distinct Eastern music understanding. This suggests that existing large-scale music pretraining corpora may implicitly encode Western-centric structural biases.
+\paragraph{Cross-cultural representation differences.}
+The experimental results suggest that performance differences across Western and Eastern classification tasks should not be interpreted purely as stronger semantic understanding. The layer-wise analysis shows that Eastern genres achieve relatively strong performance even in shallow MERT layers, whereas Western genres benefit more from middle-layer representations, suggesting that the two settings rely on different levels of information within the learned representation hierarchy.
 
-Interestingly, lightweight improvements such as multi-task learning~\cite{ruder2017overview} and confusion-aware hard mining~\cite{susmaga2004confusion} provide only incremental gains. Although both approaches improve performance individually, their combined effect remains limited, suggesting that the primary challenge may not be classifier design itself but rather intrinsic representational overlap among culturally related music genres.
+The visualization results further show that traditional genres remain relatively well separated, whereas stronger overlap is observed among modern genres. This suggests that traditional music preserves stronger culturally distinctive characteristics, while modern genres across regions increasingly share similar latent structures.
 
-Several limitations should also be acknowledged. First, despite combining multiple sources, the constructed dataset remains relatively small compared with large-scale music benchmarks and contains moderate class imbalance for some genres. Second, the current Eastern subset only covers a limited number of cultural regions and musical traditions. Many culturally diverse music systems from Africa, the Middle East, Southeast Asia, and other regions are not represented. Finally, our experiments rely on frozen MERT representations and lightweight downstream classifiers, meaning that the adaptation ability of fully fine-tuned foundation models remains unexplored.
+\paragraph{Limitations.}
+Several limitations should be acknowledged. First, although the proposed dataset combines multiple sources, its scale remains relatively small compared with modern music benchmarks and contains moderate class imbalance for several genres. Second, the subset covers only a limited number of cultural traditions and excludes many important musical systems from regions such as Africa, the Middle East, and Southeast Asia.
 
-Future work may investigate larger and more culturally balanced datasets, culturally adaptive pretraining strategies, and self-supervised objectives specifically designed for cross-cultural music understanding. In addition, incorporating music-theoretic knowledge such as rhythm structures, scales, instrument taxonomy, and cultural metadata may further improve the interpretability and generalization ability of future music foundation models.
+\paragraph{Future work.}
+Future research may investigate larger and more culturally balanced datasets, culturally adaptive pretraining strategies, and self-supervised objectives specifically designed for cross-cultural music understanding. Incorporating music-theoretic knowledge, including rhythmic structures, tonal systems, instrument taxonomy, and cultural metadata, may further improve representation interpretability and transferability.
 
 \section{Conclusion}
 
-In this work, we investigated cross-cultural music representation learning using MERT across both Western and Eastern genres. We constructed a unified cross-cultural music dataset containing traditional and modern genres from multiple cultural regions and conducted a series of experiments including baseline classification, transfer learning, multi-task learning, hard mining, layer-wise analysis, and latent space visualization.
+We investigated cross-cultural music representation learning with MERT across Western and Eastern genres, using a unified 18-genre dataset and experiments spanning baseline classification, transfer learning, multi-task learning, hard mining, layer-wise probing, and latent space visualization. Three findings stand out: (1) traditional genres remain highly separable in latent space; (2) modern popular genres exhibit substantially stronger cross-cultural overlap; and (3) Western-trained representations introduce significant negative transfer when applied to Eastern music.
 
-Our experiments reveal three major findings: (1) traditional music genres remain highly separable in latent space, (2) modern popular genres exhibit substantially stronger cross-cultural overlap, and (3) Western-trained representations introduce significant negative transfer effects when applied to Eastern music understanding.
-
-Overall, these findings suggest that current music foundation models still contain meaningful cultural biases despite strong representation capabilities, highlighting the importance of culturally diverse training corpora and evaluation benchmarks for future music understanding systems.
+Overall, current music foundation models still encode meaningful cultural biases despite their strong representation capabilities, underscoring the importance of culturally diverse training corpora and evaluation benchmarks for future music understanding systems.
 
 \bibliographystyle{unsrtnat}
 \bibliography{references}
