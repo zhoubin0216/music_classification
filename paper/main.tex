@@ -205,8 +205,8 @@ Models are optimized with AdamW (learning rate $3\times 10^{-4}$, weight
 decay $1\times 10^{-3}$). We use cross-entropy loss with label smoothing
 $0.05$ and apply class-weighted sampling proportional to inverse class
 frequency to mitigate the imbalance among Eastern genres. Each model is
-trained for up to $100$ epochs with early stopping on validation macro-F1
-(patience $5$). Batch size is \todo{[fill in: e.g.\ 32 or 64]}.
+trained with early stopping on validation macro-F1
+(patience $5$). Batch size is $32$.
 After cross-validation, a final model is trained on the union of training
 and validation tracks for the median best epoch across folds.
 
@@ -231,15 +231,14 @@ labelled instrumental-traditional; K-pop and Western Pop are
 vocal-modern). The total loss is
 $\mathcal{L} = \mathcal{L}_{\mathrm{genre}} + \lambda_1\,\mathcal{L}_{\mathrm{trad}}
 + \lambda_2\,\mathcal{L}_{\mathrm{vocal}}$ with
-$\lambda_1 = \lambda_2 = $ \todo{[fill in actual value]}.
+$\lambda_1 = \lambda_2 = 0.2$.
 
 \paragraph{Confusion-aware hard mining.}
-Following an analysis of the baseline 18-class confusion matrix, we identify
-asymmetric confusion pairs whose directional confusion rate exceeds
-\todo{[fill in threshold, e.g.\ 0.10]}. For an anchor sample of true class
-$a$ that is at risk of being confused with class $b$, we add a directional
-penalty $\alpha \cdot p(b \mid x)$ to the standard cross-entropy loss, where
-$\alpha = $ \todo{[fill in]}. The set of mined pairs includes
+Following an analysis of the baseline 18-class confusion matrix, we manually identify
+asymmetric confusion pairs that repeatedly appear as directional errors. For an
+anchor sample of true class $a$ that is at risk of being confused with class $b$,
+we multiply its per-sample cross-entropy loss by a factor
+$1 + p(b \mid x)(\gamma - 1)$, where $\gamma=2.0$ is the hard-mining weight. The set of mined pairs includes
 \emph{Enka $\to$ Sitar}, \emph{C-pop $\to$ Enka}, and \emph{Rock $\to$ Metal},
 among others. The penalty is asymmetric: only the specified directions
 are penalized.
@@ -267,13 +266,13 @@ To better understand the latent geometry learned by MERT~\cite{li2024mert}, we v
 
 Table~\ref{tab:baselines} summarizes the three baseline classifiers
 under the leakage-safe protocol. Two observations stand out. First, the
-Western 10-class classifier reaches only \todo{XX.X\%} macro-F1, which
+Western 10-class classifier reaches only $58.86\%$ macro-F1, which
 is substantially below the often-reported $\sim$80\% on GTZAN; the
 gap is consistent with the inflation magnitude estimated
 by~\cite{flexer2007closer} and confirms that previous strong results
 on GTZAN partially reflect artist-induced shortcuts rather than genuine
 genre understanding. Second, the Eastern 8-class classifier reaches
-much higher absolute performance (\todo{XX.X\%} macro-F1) than the
+much higher absolute performance ($83.66\%$ macro-F1) than the
 Western baseline, despite using the same backbone and head. As we will
 show in Section~5.4, this gap is not the result of MERT capturing
 richer Eastern semantics; it is primarily because the Eastern classes
@@ -281,9 +280,9 @@ are separable at the lowest transformer layer, indicating that they
 differ in basic acoustic and timbral properties rather than in deeper
 musical abstractions.
 
-The unified 18-class classifier reaches \todo{XX.X\%} macro-F1. When
-broken down by region, the Western subset macro-F1 is \todo{XX.X\%}
-and the Eastern subset is \todo{XX.X\%}, showing that the per-region
+The unified 18-class classifier reaches $65.02\%$ macro-F1. When
+broken down by region, the Western subset macro-F1 is $59.13\%$
+and the Eastern subset is $77.09\%$, showing that the per-region
 gap persists in the joint setting and is not an artifact of training
 each subset in isolation.
 
@@ -298,11 +297,11 @@ source-grouped) 5-fold cross-validation. ``Western subset'' and
 \toprule
 \textbf{Setting} & \textbf{Test Accuracy} & \textbf{Test Macro-F1} \\
 \midrule
-Western 10-class & \todo{0.XXX $\pm$ 0.XXX} & \todo{0.XXX $\pm$ 0.XXX} \\
-Eastern 8-class  & \todo{0.XXX $\pm$ 0.XXX} & \todo{0.XXX $\pm$ 0.XXX} \\
-Unified 18-class & \todo{0.XXX $\pm$ 0.XXX} & \todo{0.XXX $\pm$ 0.XXX} \\
-\quad ↳ Western subset only & --- & \todo{0.XXX} \\
-\quad ↳ Eastern subset only & --- & \todo{0.XXX} \\
+Western 10-class & $0.6249 \pm 0.0571$ & $0.5886 \pm 0.0531$ \\
+Eastern 8-class  & $0.9086 \pm 0.0250$ & $0.8366 \pm 0.0391$ \\
+Unified 18-class & $0.7791 \pm 0.0181$ & $0.6502 \pm 0.0213$ \\
+\quad ↳ Western subset only & --- & $0.5913$ \\
+\quad ↳ Eastern subset only & --- & $0.7709$ \\
 \bottomrule
 \end{tabular}
 \end{table}
