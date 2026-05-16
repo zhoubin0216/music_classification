@@ -48,7 +48,7 @@ Overview of the cross-cultural music representation learning framework based on 
 \end{quote}
 
 \begin{abstract}
-Recent foundation models for music understanding have demonstrated strong performance on a wide range of Music Information Retrieval (MIR) tasks. However, most existing benchmarks and pretraining corpora are heavily biased toward Western music traditions, making it unclear whether these models truly learn culturally generalizable music representations. In this work, we investigate cross-cultural music representation learning using MERT, a large-scale music foundation model, across both Western and Eastern musical genres. Since no unified benchmark currently exists for this task, we first construct a balanced cross-cultural dataset containing Western popular genres and multiple Eastern traditional and modern genres. We then perform a series of experiments including baseline classification, transfer learning, multi-task learning, confusion-aware hard mining, and layer-wise representation analysis. Our results show that MERT learns highly discriminative representations for traditional music genres, while modern genres from different cultures exhibit stronger overlap in latent space. Furthermore, direct transfer from Western music classifiers to Eastern genres produces significant negative transfer effects, suggesting that Western-centric representations do not generalize well to culturally distinct musical structures. Visualization analysis using UMAP and confusion matrices further reveals that traditional music retains strong cultural separability, whereas modern popular music exhibits increasing convergence across regions. These findings provide new insights into the cultural biases and representational properties of music foundation models.
+Recent foundation models for music understanding have demonstrated strong performance on a wide range of Music Information Retrieval (MIR) tasks. However, most existing benchmarks and pretraining corpora are heavily biased toward Western music traditions, making it unclear whether these models truly learn culturally generalizable music representations. In this work, we investigate cross-cultural music representation learning using MERT, a large-scale music foundation model, across both Western and Eastern musical genres. Since no unified benchmark currently exists for this task, we first construct a balanced cross-cultural dataset containing Western popular genres and multiple Eastern traditional and modern genres. We then perform a series of experiments including baseline classification, transfer learning, multi-task learning, confusion-aware hard mining, and layer-wise representation analysis. Our results show that MERT learns highly discriminative representations for traditional music genres, while modern genres from different cultures exhibit stronger overlap in latent space. Furthermore, direct transfer from Western music classifiers to Eastern genres produces significant negative transfer effects, suggesting that Western-centric representations do not generalize well to culturally distinct musical structures. Visualization analysis using t-SNE projections and confusion matrices further reveals that traditional music retains strong cultural separability, whereas modern popular music exhibits increasing convergence across regions. These findings provide new insights into the cultural biases and representational properties of music foundation models.
 \end{abstract}
 
 \section{Introduction}
@@ -258,7 +258,7 @@ reflect the linear separability of each layer's raw representation.
 
 We report Accuracy, Macro-F1. Macro-F1 is used as the primary evaluation metric because it better reflects performance across both majority and minority genres.
 
-To better understand the latent geometry learned by MERT~\cite{li2024mert}, we visualize pooled representations using UMAP dimensionality reduction~\cite{mcinnes2018umap}. We additionally analyze normalized confusion matrices to investigate genre-level ambiguities and cultural overlap.
+To better understand the latent geometry learned by MERT~\cite{li2024mert}, we visualize pooled representations using t-SNE dimensionality reduction~\cite{maaten2008visualizing} and analyze normalized confusion matrices to investigate genre-level ambiguities and cultural overlap. These visualizations are used as qualitative evidence rather than as standalone quantitative metrics.
 
 \section{Results}
 
@@ -396,30 +396,47 @@ Western musical structure: when these layers are reused, they remain
 useful for Western classification but fail to provide useful
 inductive bias for Eastern classification.
 
+\subsection{Visualization Findings}
+
 \begin{figure}[h]
  \centering
- \includegraphics[width=0.9\linewidth]{umap.png}
- \caption{UMAP projection of pooled MERT representations.
- \textbf{(a)} Coloured by region (Western vs.\ Eastern).
- \textbf{(b)} Coloured by era (traditional vs.\ modern), revealing that
- the dominant axis of separation is era rather than region: modern
- popular genres from all regions cluster in an overlapping zone, while
- traditional genres form regionally distinct clusters.}
- \label{fig:umap}
+ \begin{minipage}{0.49\linewidth}
+   \includegraphics[width=\linewidth]{raw_mert_tsne_by_eastern_genre.png}
+ \end{minipage}
+ \begin{minipage}{0.49\linewidth}
+   \includegraphics[width=\linewidth]{mlp_penultimate_tsne_by_eastern_genre.png}
+ \end{minipage}
+ \caption{t-SNE visualization of Eastern music in the Western-bias probing experiment. Left: raw MERT feature space. Right: penultimate features after the Western-trained MLP.}
+ \label{fig:experiment1_tsne}
 \end{figure}
 
 \begin{figure}[h]
  \centering
- \includegraphics[width=0.85\linewidth]{confusion_matrix.png}
- \caption{Row-normalized confusion matrix of the unified 18-class
- classifier. Rows and columns are ordered as
- [Western traditional, Eastern traditional, Western modern, Eastern modern]
- so that the four block-diagonal regions correspond to within-cluster
- confusions. The bottom-right block (modern $\times$ modern) is visibly
- denser than the others, consistent with the cross-cultural convergence
- of modern popular production styles.}
+ \includegraphics[width=0.75\linewidth]{projection_heatmap.png}
+ \caption{Projection distribution from Eastern genres to Western genre labels using the Western-trained classifier.}
+ \label{fig:projection_heatmap}
+\end{figure}
+
+\begin{figure}[h]
+ \centering
+ \begin{minipage}{0.49\linewidth}
+   \includegraphics[width=\linewidth]{confusion_matrix_normalized.png}
+ \end{minipage}
+ \begin{minipage}{0.49\linewidth}
+   \includegraphics[width=\linewidth]{region_confusion_matrix.png}
+ \end{minipage}
+ \caption{Confusion analysis of the unified 18-class classifier. Left: row-normalized genre-level confusion matrix. Right: region-level confusion matrix.}
  \label{fig:confusion}
 \end{figure}
+
+We further analyze the learned representation space using t-SNE projections and confusion matrices. In the direct Western-to-Eastern probing experiment, the raw MERT space already forms several coherent Eastern genre clusters. Traditional instrumental or opera-related genres such as Guqin/Guzheng, Jingju, Carnatic, and Sitar tend to occupy more distinctive regions, whereas modern popular genres such as C-pop, J-pop, and K-pop show stronger overlap. This suggests that the dominant separations in the representation space are partly driven by timbre, instrumentation, and production style.
+
+After passing Eastern samples through the Western-trained MLP, the penultimate representation becomes more aligned with Western genre boundaries. The projection heatmap shows that modern Eastern popular genres are frequently mapped to Western Pop, while Jingju and Guqin/Guzheng are often projected toward Classical. This behavior supports our negative-transfer interpretation: the Western classifier does not discover Eastern genre semantics, but instead forces Eastern music into the closest available Western categories.
+
+For the unified 18-class classifier, the normalized confusion matrix reveals that errors are not uniformly distributed. Traditional genres such as Jingju, Guqin/Guzheng, Carnatic, and Classical remain relatively separable, while modern and hybrid popular genres exhibit stronger mutual confusion. The region-level confusion matrix further indicates that most errors occur within broad cultural or production-style regions, but cross-region mistakes are more common among modern popular genres than among traditional genres.
+
+Overall, these visualizations reinforce the quantitative results: MERT representations strongly separate acoustically distinctive traditional genres, while modern popular music across regions occupies a more overlapping representation space.
+
 
 \section{Discussion}
 
